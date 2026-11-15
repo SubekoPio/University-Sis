@@ -2,6 +2,8 @@
 
 Ready-to-paste prompts for every micro-phase of the roadmap. Each prompt is kept under ~250 words, states its scope, and tells Copilot what **not** to do.
 
+> **Standing rules for every prompt:** (1) **always comment code** (file header, TSDoc on every function/class, block comments explaining why); (2) **document every step** using the step-documentation prompt that closes each phase; (3) **all UI uses the brand tokens** (`brand #312E81`, `accent #4F46E5`, `badge #0D9488`, `surface #F9FAFB`, `card #FFFFFF`, `ink #111827`, `line #E5E7EB`) and the status tokens (`success #15803D`, `warning #B45309`, `error #B91C1C`, `info #4F46E5`, `field #6B7280`, each with a soft tint) via `docs/DESIGN_SYSTEM.md`, never raw hex values; (4) **payments**: the live process is physical (the student pays at the bank, Finance records the deposit and issues the receipt); online card, bank and mobile payments show **"Coming soon"** behind per-method feature flags (default OFF).
+
 ---
 
 ## How to Use This Library
@@ -9,7 +11,7 @@ Ready-to-paste prompts for every micro-phase of the roadmap. Each prompt is kept
 1. **Open a new chat for every prompt.** This keeps context clean.
 2. **Attach context first.** Use the `#file` references shown in each prompt (or drag the files into chat).
 3. **Pick the mode listed.** *Ask* = plan or generate for review, *Edit* = apply changes to selected files, *Agent* = only for well-scoped tasks once conventions are stable.
-4. **Review the diff, run build and tests, then commit** before moving on.
+4. **Review the diff and confirm the code is commented**, run build and tests, **run the step-documentation prompt**, then commit before moving on.
 5. **Replace placeholders** such as `<module>` and `<path>` with your real names.
 6. To make a prompt reusable, save it as `.github/prompts/<phase>-<step>.prompt.md` with this header:
 
@@ -20,12 +22,30 @@ description: 'Phase X, Step Y: short title'
 ---
 ```
 
-### Standard Footer (append to any prompt)
+### Standard Footer (append to EVERY prompt)
 
 ```text
 Rules: follow .github/copilot-instructions.md. Do not modify or regenerate existing
 files unless I name them. Do not add features I did not list. If anything is unclear,
 ask me before generating.
+Comments (mandatory): start each file with a header comment; add a TSDoc block
+(summary, @param, @returns, @throws) to every exported class/function/DTO; comment
+every logical block explaining WHY; name the business rule being enforced; comment
+security-sensitive code with the threat it prevents. Never remove existing comments.
+```
+
+### UI Footer (append to every frontend prompt, in addition to the standard footer)
+
+```text
+Design: read #file:docs/DESIGN_SYSTEM.md. Use ONLY the semantic Tailwind tokens:
+bg-brand (#312E81, navigation rail), bg-accent (#4F46E5, primary CTAs, links, focus),
+bg-badge (#0D9488, GPA and attendance badges only), bg-surface (#F9FAFB, page),
+bg-card (#FFFFFF, cards), text-ink (#111827), border-line (#E5E7EB),
+border-field (#6B7280, inputs). Status: success #15803D / bg-success-soft #DCFCE7,
+warning #B45309 / bg-warning-soft #FEF3C7, error #B91C1C / bg-error-soft #FEE2E2,
+info #4F46E5 / bg-info-soft #EEF2FF. Every status shows an icon AND a text label
+(never color alone). Never hardcode hex values. One primary CTA per view. Visible focus rings.
+Comment every component (props, purpose) and each major JSX section.
 ```
 
 ### Naming Used Below
@@ -95,6 +115,10 @@ Include conventions:
 - Never overwrite existing files unless told
 - Tests are written in a separate step
 - Always read docs/RBAC_MATRIX.md and docs/DATABASE_SCHEMA.md first
+- ALWAYS comment code: file headers, TSDoc on exports, block comments explaining why
+- Document every step in docs/phases/ and docs/DEVELOPMENT_LOG.md
+- UI uses only the semantic color tokens from docs/DESIGN_SYSTEM.md (including status colors)
+- Payments: ACTIVE = physical bank deposits recorded by Finance + receipts. COMING SOON = online card/bank/mobile, each behind its own flag (payments.online.card|bank|mobile, default OFF); never enable these in code or seed data
 
 Then draft scoped files in .github/instructions/ for backend, frontend, prisma, and tests, each with an applyTo glob.
 Keep each file under 40 lines.
@@ -143,6 +167,62 @@ Set up code quality tooling at the repo root:
 
 Provide config files and the package.json scripts.
 Do not reformat the entire repo; only add config.
+```
+
+### 0.7 Design Tokens
+**Mode:** Edit
+
+```text
+Implement the brand design tokens for apps/web.
+
+Palette:
+- brand   #312E81 Deep Indigo (navigation rail)
+- accent  #4F46E5 Electric Indigo (primary CTAs, links, focus rings)
+- badge   #0D9488 Teal (GPA and attendance badges only)
+- surface #F9FAFB (page background)
+- card    #FFFFFF (cards, tables, modals)
+- ink     #111827 (text)
+- line    #E5E7EB (borders)
+- field   #6B7280 (input borders)
+
+Status colors (strong for text/icons, soft for backgrounds):
+- success #15803D / #DCFCE7   - warning #B45309 / #FEF3C7
+- error   #B91C1C / #FEE2E2   - info    #4F46E5 / #EEF2FF
+
+Do:
+1. Add these as named colors in tailwind.config.ts.
+2. Map them to shadcn/ui CSS variables in globals.css
+   (background, foreground, card, primary, border, ring, sidebar).
+3. Create docs/DESIGN_SYSTEM.md with a token table, usage rules, and
+   contrast notes (white on teal is about 3.7:1, so use it only for large or
+   bold text, or pair it with an icon and label), and the rule that every status
+   uses an icon plus a text label, never color alone.
+4. Add reusable <StatusBanner variant="success|warning|error|info"> and an
+   <ComingSoonBadge> (info-soft background, info text, text label "Coming soon") component.
+5. Add an ESLint rule or script that flags raw hex colors in components.
+
+Comment every token with its role. Do not build any pages yet.
+```
+
+### 0.8 Documentation Scaffold
+**Mode:** Edit
+
+```text
+Create the documentation scaffold.
+
+Files:
+- docs/DEVELOPMENT_LOG.md (newest-first entries: date, phase/step, summary, PR link)
+- docs/CHANGELOG.md (Keep a Changelog format)
+- docs/adr/0000-template.md (context, decision, alternatives, consequences)
+- docs/phases/README.md explaining the step-document naming convention
+- docs/phases/step-template.md with sections: Goal, What Was Built,
+  Key Decisions, Business Rules, How to Run & Test, Data/Permissions Impact,
+  Known Limitations, Copilot Usage
+- .github/pull_request_template.md with a checklist: step doc added, log updated,
+  code commented, schema/RBAC/design docs updated, tests passing
+
+Also configure eslint-plugin-jsdoc to require doc blocks on exported functions,
+classes, and methods. Add explanatory comments to every config file.
 ```
 
 ---
@@ -283,6 +363,30 @@ Create an API client module that attaches the access token and handles
 refresh-on-401 once.
 Include loading, error, and success states, and be mobile responsive.
 Do not modify backend code.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
+```
+
+### 1.9 Document the Phase
+**Mode:** Ask
+
+```text
+Write the step documents for Phase 1 using #file:docs/phases/step-template.md.
+
+For each completed step (1.1 to 1.8), create
+docs/phases/phase-1/step-1.<n>-<name>.md covering: goal, files created or
+changed (paths), key decisions and trade-offs, business rules implemented,
+how to run and test (exact commands), data and permissions impact, known
+limitations, and Copilot usage notes.
+
+Then:
+1. Append one entry per step to docs/DEVELOPMENT_LOG.md (newest first).
+2. List any decision that deserves an ADR and draft it in docs/adr/.
+3. List out-of-date sections in docs/DATABASE_SCHEMA.md and docs/RBAC_MATRIX.md.
+
+Base everything on the actual code in #codebase. Do not invent features. Do not
+modify source code in this step.
 ```
 
 ---
@@ -404,12 +508,15 @@ Do not change production code; list bugs instead.
 **Mode:** Edit
 
 ```text
-Create student portal pages in apps/web: /student/profile,
+Create student portal pages in apps/web (navigation rail in brand color; GPA and attendance shown as teal badge components): /student/profile,
 /student/registration, /student/timetable, /student/attendance.
 
 Use shadcn/ui, TanStack Query, mobile-first layout.
 Registration page: list offerings, show clash/prereq errors inline,
 confirm dialog. Backend already exists; do not change it.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
 ```
 
 ### 2.10 Registrar UI
@@ -421,11 +528,67 @@ student detail, course and offering management.
 
 Use shadcn/ui data tables and TanStack Query. Guard routes by role.
 Do not modify backend code.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
+```
+
+### 2.11 Document the Phase
+**Mode:** Ask
+
+```text
+Write the step documents for Phase 2 using #file:docs/phases/step-template.md.
+
+For each completed step (2.1 to 2.10), create
+docs/phases/phase-2/step-2.<n>-<name>.md covering: goal, files created or
+changed (paths), key decisions and trade-offs, business rules implemented,
+how to run and test (exact commands), data and permissions impact, known
+limitations, and Copilot usage notes.
+
+Then:
+1. Append one entry per step to docs/DEVELOPMENT_LOG.md (newest first).
+2. List any decision that deserves an ADR and draft it in docs/adr/.
+3. List out-of-date sections in docs/DATABASE_SCHEMA.md and docs/RBAC_MATRIX.md.
+
+Base everything on the actual code in #codebase. Do not invent features. Do not
+modify source code in this step.
 ```
 
 ---
 
 # Phase 3: Finance Module
+
+> **How payments work:** the live process is **physical**. The student pays at the bank; **Finance records the deposit and issues the receipt**. If a student tries to pay online from the system (**card, online bank, mobile money**), the system shows **"Coming soon"**. Each online method has its own flag (`payments.online.card`, `.bank`, `.mobile`), **OFF by default**. Never enable these flags during development; step 3.10 is a deferred activation runbook.
+
+### 3.0 Feature Flag Infrastructure (Online Payment Switches)
+**Mode:** Edit
+**Context:** `#file:prisma/schema.prisma #file:docs/RBAC_MATRIX.md`
+
+```text
+Build a reusable feature-flag system. First flags (all default OFF):
+payments.online.card, payments.online.bank, payments.online.mobile.
+
+Backend (apps/api/src/features):
+1. Prisma models: FeatureFlag (key unique, enabled default false, description,
+   updatedById, updatedAt) and FeatureFlagAudit (append-only: key, fromValue,
+   toValue, changedById, reason, createdAt).
+2. Seed the three flags = false with upsert that NEVER overwrites an existing
+   value. .env.example values only seed the first state.
+3. FeatureFlagService: isEnabled(key) cached in Redis (30s TTL);
+   setEnabled(key, value, userId, reason) writes flag + audit row in one
+   transaction and invalidates the cache.
+4. @RequireFeature('<key>') decorator + guard. When OFF respond 403 with
+   { code: "FEATURE_DISABLED", comingSoon: true, feature, method, message }.
+5. GET /features (authenticated, returns the flag map for the UI) and
+   PATCH /admin/features/:key (admin only, reason required). Add the permission
+   to docs/RBAC_MATRIX.md.
+
+Frontend (apps/web): useFeature(key) hook (TanStack Query) and a
+<FeatureGate feature="..." fallback={...}> component.
+
+Include unit tests: default OFF, toggle audit, guard 403, cache invalidation.
+Write NO payment logic in this step.
+```
 
 ### 3.1 Finance Schema
 **Mode:** Ask
@@ -435,15 +598,21 @@ Do not modify backend code.
 Add Prisma models for finance.
 
 Models: FeeStructure, FeeItem, StudentInvoice, Payment, Receipt,
-OutstandingBalance, CarryForwardBalance, TransactionLog.
+OutstandingBalance, CarryForwardBalance, TransactionLog, PaymentReference.
 
 Requirements:
 - All amounts are Int minor units (no Float/Decimal drift)
 - Currency field
-- Receipt number unique and sequential
+- Payment: method enum (BANK_DEPOSIT now; CARD, ONLINE_BANK, MOBILE_MONEY
+  reserved for later), bankName, bankReference, depositDate, optional slip
+  scan key, recordedById, status (RECORDED, VOIDED), voidedById, voidReason,
+  voidedAt
+- Unique constraint on (bankName, bankReference) to stop duplicate slips
+- PaymentReference: unique reference number per student, term, invoice
+- Receipt number unique and sequential; receipts can be marked VOID
 - TransactionLog is append-only (no update/delete in design)
 - Relations to Term, Program/Offering, Student
-- Indexes, enums (PaymentMethod, PaymentStatus), timestamps
+- Indexes, enums, timestamps
 
 Do NOT generate APIs. Do not modify existing models.
 ```
@@ -478,22 +647,29 @@ Features:
 Use transactions. Service only; no controller yet.
 ```
 
-### 3.4 Payment Logic
+### 3.4 Payment Logic (Bank Deposits Recorded by Finance)
 **Mode:** Edit
 
 ```text
-Create PaymentService using a service-based architecture.
+Create PaymentService for the PHYSICAL payment flow (student pays at the bank,
+Finance records it). Service-based architecture.
 
 Features:
-- Record payment (idempotency key required)
+- Generate a unique payment reference for a student/term/invoice (to be written
+  on the bank deposit slip)
+- recordBankDeposit(dto, recordedById): student, invoice, amount, bankName,
+  bankReference, depositDate, optional slip scan; reject a duplicate
+  (bankName, bankReference) with ConflictException
 - Calculate balance after payment
 - Carry forward excess payments to the next term
-- Calculate outstanding balance
-- Calculate fee-paid percentage per student per term
+- Calculate outstanding balance and fee-paid percentage per student per term
+- voidPayment(id, voidedById, reason): never delete; write a reversing
+  TransactionLog entry; the voider must differ from the recorder
 - Write a TransactionLog entry for every change
 
 All writes in a single DB transaction. Reject negative or zero amounts.
-Service only. No controller, no frontend.
+Students can never record payments themselves.
+Service only. No controller, no frontend, no online payment code.
 ```
 
 ### 3.5 Finance Tests (Run Before Receipts)
@@ -503,9 +679,10 @@ Service only. No controller, no frontend.
 Write unit and integration tests for the finance services.
 
 Cases: exact payment, partial payment, overpayment carry-forward,
-multiple payments, duplicate idempotency key, negative amount,
-percentage rounding, concurrent payments (no lost updates),
-invoice generation idempotency.
+multiple payments, duplicate bank reference rejected, negative amount,
+percentage rounding, concurrent payments (no lost updates), void then
+re-record, voider equals recorder rejected, invoice generation idempotency,
+payment reference uniqueness.
 
 Do not change production code; list any bugs found.
 ```
@@ -514,26 +691,39 @@ Do not change production code; list any bugs found.
 **Mode:** Edit
 
 ```text
-Create the PaymentController and DTOs for the existing PaymentService.
+Create the PaymentController and DTOs for the existing PaymentService, plus an
+OnlinePaymentController.
 
-Endpoints: record payment, list payments (filters), get student statement.
-RBAC: bursar records; students read OWN statement only.
-Add Swagger docs. Do not modify services.
+Bank-deposit endpoints (ACTIVE): generate reference (student, own only), record
+deposit (bursar), list payments (filters), void payment (admin or second bursar,
+reason required), student statement (own only), daily bank-deposit report.
+
+Online endpoints (COMING SOON): POST /payments/online/:method/initiate for
+card, bank and mobile. Guard each with @RequireFeature('payments.online.<method>')
+so that while OFF they return 403 { code: "FEATURE_DISABLED", comingSoon: true,
+method, message }. The body must contain no gateway logic; add a PaymentGateway
+interface (initiate, verify, refund) and placeholder adapters that throw
+NotImplemented. Document the 403 in Swagger.
+
+Add controller tests: bank-deposit RBAC, and each online method returns the
+coming-soon 403 while OFF. Do not modify services.
 ```
 
 ### 3.7 Receipt Generation
 **Mode:** Edit
 
 ```text
-Create ReceiptService.
+Create ReceiptService (ACTIVE).
 
 Features:
+- Issue a receipt automatically when Finance records a bank deposit
 - Gap-free sequential receipt numbering (transaction safe)
 - Printable PDF using PDFKit
 - School logo watermark and school details from config
-- Transaction reference on the receipt
+- Transaction reference, bank name and deposit-slip reference on the receipt
+- VOID marking when a payment is voided (keep the original number)
 - Store the PDF through the existing StorageService
-- Re-download the same receipt without regenerating a new number
+- Re-download the same receipt without generating a new number
 
 Add the controller endpoint to fetch it. No frontend.
 ```
@@ -543,20 +733,88 @@ Add the controller endpoint to fetch it. No frontend.
 
 ```text
 Create bursar dashboard pages in apps/web/finance:
-payment records (filter, search, pagination), outstanding balances,
-receipt history with download, fee analytics (Recharts).
+fee structures and invoices, a "Record bank deposit" form (student search,
+invoice, amount, bank, deposit-slip reference, deposit date, optional slip
+upload) with clear duplicate-slip error, payment records (filter, search,
+pagination), receipt print and history, void dialog with required reason,
+daily bank-deposit report, fee analytics (Recharts).
 
 Use Next.js, shadcn/ui, TanStack Query. Format money from minor units.
 Do not modify backend code.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
 ```
 
 ### 3.9 Student Financial Statement UI
 **Mode:** Edit
 
 ```text
-Create student pages: /student/finance (balance, invoices, payments,
-receipts download, payment reference number generator).
-Mobile first. Read-only. Use existing endpoints only.
+Create student pages: /student/finance with
+- balance, invoices, payment history, receipt downloads
+- "Get payment reference" button (generates the reference to write on the
+  bank deposit slip)
+- "How to pay now" panel: bank name, account details (from config), and the
+  steps: pay at the bank, bring the slip to Finance, collect your receipt
+- "Pay online" section listing Card, Online bank and Mobile money, each with a
+  "Coming soon" badge (<ComingSoonBadge>) and a disabled button. Wrap each in
+  <FeatureGate feature="payments.online.<method>"> so it activates later with no
+  code change. If the student clicks, show the message: "<Method> payments are
+  coming soon. Please pay at the bank and collect your receipt from Finance."
+
+Mobile first. Use existing endpoints only. No errors or broken layout.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
+```
+
+### 3.10 Online Payment Activation (DEFERRED: run only when a method is approved)
+**Mode:** Ask, then Edit
+
+```text
+Prepare, but do NOT execute, activation of ONE online method (<card|bank|mobile>).
+
+Create docs/runbooks/ONLINE_PAYMENT_ACTIVATION.md containing:
+1. Provider selection criteria and integration checklist (hosted checkout for
+   cards so card numbers never touch our servers; webhook signature
+   verification; idempotency; refunds).
+2. Implementation plan for the gateway adapter behind the PaymentGateway
+   interface, including reconciliation with provider reports.
+3. Pre-activation checklist: sandbox tests passing, security review done,
+   receipts issued for online payments, exam fee rule verified, stakeholders
+   approved.
+4. Activation steps: enable payments.online.<method> on staging, smoke test,
+   then production via PATCH /admin/features/:key with a written reason.
+5. First-48-hours monitoring and rollback (toggle the flag OFF; completed
+   payments stay untouched).
+6. Post-activation: CHANGELOG, DEVELOPMENT_LOG, ADR.
+
+Do NOT change any flag value, seed, or environment variable in this step.
+```
+
+### 3.11 Document the Phase
+**Mode:** Ask
+
+```text
+Write the step documents for Phase 3 using #file:docs/phases/step-template.md.
+
+For each completed step (3.0 to 3.10), create
+docs/phases/phase-3/step-3.<n>-<name>.md covering: goal, files created or
+changed (paths), key decisions and trade-offs, business rules implemented,
+how to run and test (exact commands), data and permissions impact, known
+limitations, and Copilot usage notes.
+
+Then:
+1. Append one entry per step to docs/DEVELOPMENT_LOG.md (newest first).
+2. List any decision that deserves an ADR and draft it in docs/adr/
+   (feature-flag design, maker-checker voids, bank-reference uniqueness).
+3. List out-of-date sections in docs/DATABASE_SCHEMA.md and docs/RBAC_MATRIX.md.
+Include the physical payment workflow with a worked example (payment,
+partial payment, carry-forward, receipt numbering, void) and a table of which
+payment methods are active vs coming soon.
+
+Base everything on the actual code in #codebase. Do not invent features. Do not
+modify source code in this step.
 ```
 
 ---
@@ -676,6 +934,31 @@ Teacher: create/edit assignment, upload materials, submissions list, grading das
 
 Use Next.js, shadcn/ui, TanStack Query. Show upload progress and validation
 errors. Do not modify backend code.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
+```
+
+### 4.9 Document the Phase
+**Mode:** Ask
+
+```text
+Write the step documents for Phase 4 using #file:docs/phases/step-template.md.
+
+For each completed step (4.1 to 4.8), create
+docs/phases/phase-4/step-4.<n>-<name>.md covering: goal, files created or
+changed (paths), key decisions and trade-offs, business rules implemented,
+how to run and test (exact commands), data and permissions impact, known
+limitations, and Copilot usage notes.
+
+Then:
+1. Append one entry per step to docs/DEVELOPMENT_LOG.md (newest first).
+2. List any decision that deserves an ADR and draft it in docs/adr/.
+3. List out-of-date sections in docs/DATABASE_SCHEMA.md and docs/RBAC_MATRIX.md.
+Include the upload validation rules and storage configuration.
+
+Base everything on the actual code in #codebase. Do not invent features. Do not
+modify source code in this step.
 ```
 
 ---
@@ -716,7 +999,8 @@ Create ExamEligibilityService.
 Rules (configurable per exam):
 - Assignment completion threshold
 - Minimum fee-paid percentage (use the existing PaymentService, do not
-  duplicate its logic)
+  duplicate its logic). It reads the payments that Finance recorded from bank
+  deposits, so the rule is fully active.
 - Missed-assignment restrictions
 - Return { eligible: boolean, reasons: string[] }
 - Cache the decision in Redis with invalidation on payment or submission events
@@ -764,6 +1048,31 @@ Create exam pages in apps/web: exams dashboard, eligibility status with
 clear reasons (e.g. "Fees paid 40%, 60% required"), exam attempts,
 lecturer grading pages, student result pages, transcript download.
 Use shadcn/ui and TanStack Query. Do not modify backend code.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
+```
+
+### 5.8 Document the Phase
+**Mode:** Ask
+
+```text
+Write the step documents for Phase 5 using #file:docs/phases/step-template.md.
+
+For each completed step (5.1 to 5.7), create
+docs/phases/phase-5/step-5.<n>-<name>.md covering: goal, files created or
+changed (paths), key decisions and trade-offs, business rules implemented,
+how to run and test (exact commands), data and permissions impact, known
+limitations, and Copilot usage notes.
+
+Then:
+1. Append one entry per step to docs/DEVELOPMENT_LOG.md (newest first).
+2. List any decision that deserves an ADR and draft it in docs/adr/.
+3. List out-of-date sections in docs/DATABASE_SCHEMA.md and docs/RBAC_MATRIX.md.
+Include the eligibility rule matrix and GPA policy.
+
+Base everything on the actual code in #codebase. Do not invent features. Do not
+modify source code in this step.
 ```
 
 ---
@@ -804,6 +1113,9 @@ Components: KPI cards, Recharts charts, data tables, filters, export buttons.
 Use Next.js, shadcn/ui, TanStack Query with skeleton loading states.
 Role-specific dashboards (bursar, registrar, lecturer).
 Do not modify backend code.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
 ```
 
 ### 6.4 PDF Report Exports
@@ -825,6 +1137,28 @@ return a signed URL. Add the controller endpoint only.
 Write tests verifying aggregation correctness against a fixed seeded dataset,
 cache invalidation, and that exported totals equal on-screen totals.
 Do not modify production code.
+```
+
+### 6.6 Document the Phase
+**Mode:** Ask
+
+```text
+Write the step documents for Phase 6 using #file:docs/phases/step-template.md.
+
+For each completed step (6.1 to 6.5), create
+docs/phases/phase-6/step-6.<n>-<name>.md covering: goal, files created or
+changed (paths), key decisions and trade-offs, business rules implemented,
+how to run and test (exact commands), data and permissions impact, known
+limitations, and Copilot usage notes.
+
+Then:
+1. Append one entry per step to docs/DEVELOPMENT_LOG.md (newest first).
+2. List any decision that deserves an ADR and draft it in docs/adr/.
+3. List out-of-date sections in docs/DATABASE_SCHEMA.md and docs/RBAC_MATRIX.md.
+Include the aggregation definitions and cache invalidation rules.
+
+Base everything on the actual code in #codebase. Do not invent features. Do not
+modify source code in this step.
 ```
 
 ---
@@ -914,9 +1248,74 @@ docs/RUNBOOK.md (deploy, rollback, restore, common incidents), and a
 short admin guide outline. Do not modify source code.
 ```
 
+### 7.9 Document the Phase
+**Mode:** Ask
+
+```text
+Write the step documents for Phase 7 using #file:docs/phases/step-template.md.
+
+For each completed step (7.1 to 7.8), create
+docs/phases/phase-7/step-7.<n>-<name>.md covering: goal, files created or
+changed (paths), key decisions and trade-offs, business rules implemented,
+how to run and test (exact commands), data and permissions impact, known
+limitations, and Copilot usage notes.
+
+Then:
+1. Append one entry per step to docs/DEVELOPMENT_LOG.md (newest first).
+2. List any decision that deserves an ADR and draft it in docs/adr/.
+3. List out-of-date sections in docs/DATABASE_SCHEMA.md and docs/RBAC_MATRIX.md.
+Include the security findings and fixes, backup and restore procedure, and rollback steps.
+
+Base everything on the actual code in #codebase. Do not invent features. Do not
+modify source code in this step.
+```
+
 ---
 
 # Cross-Cutting Utility Prompts
+
+### Document the Step (use after EVERY micro-phase)
+**Mode:** Ask
+
+```text
+Document the step I just completed: <phase.step and name>.
+Use #file:docs/phases/step-template.md and my staged changes (#changes).
+Create docs/phases/phase-<N>/step-<N.M>-<name>.md and append a dated entry to
+docs/DEVELOPMENT_LOG.md. Cover: goal, files changed, key decisions, business
+rules, exact commands to run and test, data/permissions impact, known
+limitations. Do not change source code.
+```
+
+### Add Comments to Existing Code
+**Mode:** Edit
+
+```text
+Add comments to #file:<path> WITHOUT changing any logic or formatting of code.
+Add: a file header comment, TSDoc on every exported class/function/method,
+and a short "why" comment above every logical block. Name the business rule
+or security concern where relevant. Keep existing comments. If a comment would
+only repeat the code, skip it.
+```
+
+### Comment Review (before committing)
+**Mode:** Ask
+
+```text
+Review #changes for comment and documentation gaps. List every file, function,
+or block that lacks a header, TSDoc, or a why-comment, and every comment that
+no longer matches the code. Output a table: file, line, gap. Do not modify code.
+```
+
+### Brand Token Audit
+**Mode:** Ask
+
+```text
+Scan apps/web for raw hex colors, non-token Tailwind colors (e.g. bg-blue-500),
+misuse of the teal badge color outside GPA/attendance, statuses shown by color
+alone (no icon or text), and online payment options (card, bank, mobile) not wrapped in <FeatureGate> with a "Coming soon" badge. Compare with
+#file:docs/DESIGN_SYSTEM.md. Output a table: file, line, issue, correct token.
+Do not modify code.
+```
 
 ### Fix a Failing Test
 **Mode:** Edit
@@ -988,3 +1387,4 @@ Context: see docs/ARCHITECTURE.md and .github/copilot-instructions.md
 | Isolated test-writing or docs issues | Coding agent (issue → PR) |
 | Multi-file, well-specified task after conventions are stable | Agent |
 | First review of every PR | Copilot code review, plus human review |
+| Step documentation, comment gaps, brand token audits | Ask |
