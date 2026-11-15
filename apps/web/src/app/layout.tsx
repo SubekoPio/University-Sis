@@ -1,8 +1,12 @@
+// Purpose: Provide the shared document shell, providers, and footer for the web app.
+// Used by: Every Next.js App Router page.
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { Footer } from "@/components/layout/footer";
+import { Providers } from "./providers";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -20,7 +24,15 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={cn("font-sans", geist.variable)}>
-      <body>{children}</body>
+      <body className="flex min-h-screen flex-col bg-surface text-ink">
+        {/* Keep server-state mutations and the shared footer available to every route. */}
+        <Providers>
+          <main id="main-content" className="flex-1">
+            {children}
+          </main>
+          <Footer />
+        </Providers>
+      </body>
     </html>
   );
 }

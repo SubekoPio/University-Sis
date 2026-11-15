@@ -1,6 +1,14 @@
 # Purpose: Run local PostgreSQL, Redis, and MinIO services for development.
 # Used by: Developers starting the application's local data and storage dependencies.
 services:
+  # Mailpit captures local development emails without delivering them externally.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+
   # PostgreSQL stores SIS records and persists its local data in a named volume.
   postgres:
     image: postgres:16

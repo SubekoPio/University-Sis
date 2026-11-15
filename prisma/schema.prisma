@@ -29,6 +29,8 @@ model User {
   passwordHash            String
   /// Current account lifecycle state.
   status                  UserStatus               @default(ACTIVE)
+  /// Whether the account's email address has been verified.
+  emailVerified           Boolean                  @default(false)
   /// Roles assigned to this account.
   roles                   UserRole[]
   /// Active and historical authentication sessions for this account.

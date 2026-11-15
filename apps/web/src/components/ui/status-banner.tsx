@@ -53,7 +53,9 @@ export function StatusBanner({ variant, children, className }: StatusBannerProps
       aria-atomic="true"
       className={cn("flex items-start gap-3 rounded-lg border p-4", variantClassName, className)}
     >
+      {/* Icon supplements the visible status text without carrying meaning alone. */}
       <Icon aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+      {/* Separate the status label from server or form feedback text. */}
       <div className="space-y-1">
         <p className="font-semibold">{label}</p>
         <div className="text-sm">{children}</div>

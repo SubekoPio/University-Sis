@@ -134,7 +134,11 @@ Keep each file under 40 lines.
 ```text
 Draft docs/RBAC_MATRIX.md for a school system.
 
-Roles: student, lecturer, bursar, registrar, admin.
+Roles: student, lecturer, bursar (finance), registrar, admin.
+Several users may hold the bursar role; permissions are checked per signed-in
+user. Include finance permissions: finance:payment:record, finance:payment:void
+(approver must differ from the recorder), finance:receipt:read,
+finance:report:read.
 Modules: auth, SIS, academic, finance, LMS, exams, reports.
 
 Produce a table: rows = permissions (e.g. finance:payment:create),
@@ -702,6 +706,8 @@ Features:
 
 All writes in a single DB transaction. Reject negative or zero amounts.
 Students can never record payments themselves.
+Several finance users may record payments at the same time: every call takes the
+authenticated user's id (no shared accounts) and stores it as recordedById.
 Service only. No controller, no frontend, no online payment code.
 ```
 
@@ -716,7 +722,8 @@ Cases: exact payment, partial payment, overpayment carry-forward,
 multiple payments, duplicate bank reference rejected, negative amount,
 percentage rounding, concurrent payments (no lost updates), void then
 re-record, voider equals recorder rejected, invoice generation idempotency,
-payment reference uniqueness.
+payment reference uniqueness, two finance users recording concurrently get
+distinct gap-free receipt numbers, same user cannot approve their own void.
 
 Do not change production code; list any bugs found.
 ```
@@ -730,7 +737,8 @@ Create the PaymentController and DTOs for the existing PaymentService, plus an
 OnlinePaymentController.
 
 Bank-deposit endpoints (ACTIVE): generate reference (student, own only), record
-deposit (bursar), list payments (filters), void payment (admin or second bursar,
+deposit (any authenticated user with finance:payment:record; several finance
+users allowed), list payments (filters), void payment (admin or second bursar,
 reason required), student statement (own only), daily bank-deposit report.
 
 Online endpoints (COMING SOON): POST /payments/online/:method/initiate for
@@ -740,7 +748,8 @@ method, message }. The body must contain no gateway logic; add a PaymentGateway
 interface (initiate, verify, refund) and placeholder adapters that throw
 NotImplemented. Document the 403 in Swagger.
 
-Add controller tests: bank-deposit RBAC, and each online method returns the
+Add controller tests: unauthenticated 401, authenticated without finance
+permission 403, finance user allowed, bank-deposit RBAC, and each online method returns the
 coming-soon 403 while OFF. Do not modify services.
 ```
 
@@ -753,7 +762,8 @@ Create ReceiptService (ACTIVE).
 
 Features:
 - Issue a receipt automatically when Finance records a bank deposit
-- Gap-free sequential receipt numbering (transaction safe)
+- Gap-free sequential receipt numbering (transaction safe, correct even when
+  several finance users record payments at the same moment)
 - Printable PDF using PDFKit
 - School logo watermark and school details from config
 - Transaction reference, bank name and deposit-slip reference on the receipt
@@ -773,7 +783,7 @@ Create bursar dashboard pages in apps/web/finance:
 fee structures and invoices, a "Record bank deposit" form (student search,
 invoice, amount, bank, deposit-slip reference, deposit date, optional slip
 upload) with clear duplicate-slip error, payment records (filter, search,
-pagination), receipt print and history, void dialog with required reason,
+pagination, "Recorded by" column and filter by finance user), receipt print and history, void dialog with required reason,
 daily bank-deposit report, fee analytics (Recharts).
 
 Use Next.js, shadcn/ui, TanStack Query. Format money from minor units.

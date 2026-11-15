@@ -16,49 +16,57 @@ roles, matrix permissions, role grants, and one administrator.
 - Added Prisma configuration, package scripts, runtime dependencies, and
   environment placeholders.
 
+### Files created or changed
+
+- `prisma/migrations/20261115171500_auth_rbac_init/migration.sql`
+- `prisma/seed.ts`, `prisma.config.ts`
+- `package.json`, `pnpm-lock.yaml`, `.env.example`
+
 ## Key Decisions
 
 - The RBAC matrix is copied as the source for role-to-permission assignments.
 - The seed upserts all seeded records; it does not change an existing admin
   password or status.
-- The migration was generated from the Prisma schema without connecting to a
-  database. It has not been applied.
+- The seed is idempotent and wrapped in a transaction. The administrator
+  password is hashed with Argon2; `ADMIN_PASSWORD` is mandatory.
+- The initial migration and seed were applied successfully to the local
+  development database. The later email-verification migration is separate.
 
 ## Business Rules
 
 - A non-empty `ADMIN_PASSWORD` must be set outside source control before seeding.
 - Role grants follow `docs/RBAC_MATRIX.md`; role and permission names are
   upserted by their unique keys.
-- Seeding is wrapped in a transaction. The administrator receives the `admin`
-  role.
+- The administrator receives the `admin` role. On seed reruns an existing
+  administrator's password and status are not overwritten.
 
 ## How to Run & Test
 
-1. Copy `.env.example` to `.env`, set `POSTGRES_PASSWORD`, update
-   `DATABASE_URL` to use that password and the intended database, and set
-   `ADMIN_PASSWORD`. Optionally set `ADMIN_EMAIL`.
-2. Ensure the target database is the intended development database and has
-   been backed up if it contains data.
-3. Apply the migration with `corepack pnpm db:migrate --name auth_rbac_init`.
-4. Seed roles, permissions, and the admin with `corepack pnpm db:seed`.
+1. Copy `.env.example` to `.env`; configure `POSTGRES_PASSWORD`,
+   `DATABASE_URL`, and a non-empty `ADMIN_PASSWORD`. Optionally configure
+   `ADMIN_EMAIL`.
+2. Start PostgreSQL with `docker compose up -d postgres`.
+3. Apply pending migrations with `corepack pnpm@12.21.0 db:migrate`.
+4. Seed roles, permissions, and the administrator with
+   `corepack pnpm@12.21.0 db:seed`.
 
-- `corepack pnpm exec prisma validate --schema prisma\schema.prisma` — passed.
-- `corepack pnpm exec prisma migrate diff --from-empty --to-schema-datamodel prisma\schema.prisma --script --output prisma\migrations\20261115171500_auth_rbac_init\migration.sql` — passed; generated without connecting to a database.
+- `corepack pnpm@12.21.0 exec prisma validate --schema prisma\schema.prisma` — passed.
+- `corepack pnpm@12.21.0 exec prisma migrate diff --from-empty --to-schema-datamodel prisma\schema.prisma --script --output prisma\migrations\20261115171500_auth_rbac_init\migration.sql` — passed; generated without connecting to a database.
 - Seed permission comparison against `docs/RBAC_MATRIX.md` — passed (61 permissions; no missing, extra, or mismatched grants).
-- `corepack pnpm exec tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node prisma\seed.ts prisma.config.ts` — passed.
-- `corepack pnpm db:seed` with `ADMIN_PASSWORD` unset — exited before connecting, as expected.
-- Migration application and seed execution — not run: no `.env` or `DATABASE_URL` / `ADMIN_PASSWORD` is configured, and the responding local database target is unknown.
+- `corepack pnpm@12.21.0 db:migrate` — applied the initial auth/RBAC migration to the local development database.
+- `corepack pnpm@12.21.0 db:seed` — completed successfully for the local development database.
+- `corepack pnpm@12.21.0 exec tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node prisma\seed.ts prisma.config.ts` — passed.
 
 ## Data/Permissions Impact
 
-The migration and seed are prepared but have not changed any database. The seed
-adds no permission beyond those listed in the RBAC matrix. No APIs or services
-were added.
+The initial migration was applied to the local development database. The seed
+adds the five roles, 61 matrix permissions, role grants, and one administrator.
+No APIs or services were added in this step.
 
 ## Known Limitations
 
-- Migration application and seed execution require confirmation of the target
-  database and local environment variables.
+- The email-verification column is added by the later Step 1.6 migration; it
+  must be applied before using that updated API against an older database.
 - The seed does not reset an existing administrator password; change it through
   the authentication flow once available.
 
