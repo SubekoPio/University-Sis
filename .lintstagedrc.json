@@ -1,0 +1,9 @@
+{
+  "**/*.{js,jsx,ts,tsx,mjs,cjs}": [
+    "node ./node_modules/eslint/bin/eslint.js --fix",
+    "node ./node_modules/prettier/bin/prettier.cjs --config .prettierrc.json --write"
+  ],
+  "**/*.{css,json,md,scss,yaml,yml}": [
+    "node ./node_modules/prettier/bin/prettier.cjs --config .prettierrc.json --write"
+  ]
+}

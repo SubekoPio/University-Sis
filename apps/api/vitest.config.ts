@@ -1,4 +1,6 @@
-import { defineConfig } from 'vitest/config';
+// Purpose: Configure API unit tests to use Vitest and TypeScript path aliases.
+// Used by: The API package's unit-test script.
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   // Resolves the path aliases declared in tsconfig.json, including the ones
@@ -6,7 +8,7 @@ export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
     globals: true,
-    root: './',
-    include: ['**/*.spec.ts'],
+    root: "./",
+    include: ["**/*.spec.ts"],
   },
 });

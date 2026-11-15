@@ -1,3 +1,4 @@
+// Purpose: Type-check shared package source without emitting build output.
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {

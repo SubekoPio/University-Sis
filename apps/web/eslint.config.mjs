@@ -1,3 +1,5 @@
+// Purpose: Apply Next.js Core Web Vitals and TypeScript lint rules to the web app.
+// Used by: The web package's ESLint script.
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";

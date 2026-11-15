@@ -10,15 +10,15 @@ Ready-to-paste prompts for every micro-phase of the roadmap. Each prompt is kept
 
 1. **Open a new chat for every prompt.** This keeps context clean.
 2. **Attach context first.** Use the `#file` references shown in each prompt (or drag the files into chat).
-3. **Pick the mode listed.** *Ask* = plan or generate for review, *Edit* = apply changes to selected files, *Agent* = only for well-scoped tasks once conventions are stable.
+3. **Pick the mode listed.** _Ask_ = plan or generate for review, _Edit_ = apply changes to selected files, _Agent_ = only for well-scoped tasks once conventions are stable.
 4. **Review the diff and confirm the code is commented**, run build and tests, **run the step-documentation prompt**, then commit before moving on.
 5. **Replace placeholders** such as `<module>` and `<path>` with your real names.
 6. To make a prompt reusable, save it as `.github/prompts/<phase>-<step>.prompt.md` with this header:
 
 ```markdown
 ---
-mode: 'edit'
-description: 'Phase X, Step Y: short title'
+mode: "edit"
+description: "Phase X, Step Y: short title"
 ---
 ```
 
@@ -50,18 +50,19 @@ Comment every component (props, purpose) and each major JSX section.
 
 ### Naming Used Below
 
-| Placeholder | Meaning |
-|---|---|
-| `apps/api` | NestJS backend |
-| `apps/web` | Next.js frontend |
-| `prisma/schema.prisma` | Prisma schema |
-| `docs/*.md` | Context documents |
+| Placeholder            | Meaning           |
+| ---------------------- | ----------------- |
+| `apps/api`             | NestJS backend    |
+| `apps/web`             | Next.js frontend  |
+| `prisma/schema.prisma` | Prisma schema     |
+| `docs/*.md`            | Context documents |
 
 ---
 
 # Phase 0: Foundation & Copilot Setup
 
 ### 0.1 Monorepo Skeleton
+
 **Mode:** Ask → then run commands manually
 
 ```text
@@ -84,6 +85,7 @@ Do not write any business logic or feature code.
 ```
 
 ### 0.2 Docker Compose
+
 **Mode:** Edit
 
 ```text
@@ -100,6 +102,7 @@ Use no hardcoded secrets. Do not create application code.
 ```
 
 ### 0.3 Copilot Instruction Files
+
 **Mode:** Ask (review before saving)
 
 ```text
@@ -125,6 +128,7 @@ Keep each file under 40 lines.
 ```
 
 ### 0.4 Context Documents
+
 **Mode:** Ask
 
 ```text
@@ -142,6 +146,7 @@ Do not write code.
 ```
 
 ### 0.5 CI Pipeline
+
 **Mode:** Edit
 
 ```text
@@ -156,6 +161,7 @@ Do not add deployment steps yet.
 ```
 
 ### 0.6 Quality Gates
+
 **Mode:** Edit
 
 ```text
@@ -170,6 +176,7 @@ Do not reformat the entire repo; only add config.
 ```
 
 ### 0.7 Design Tokens
+
 **Mode:** Edit
 
 ```text
@@ -205,6 +212,7 @@ Comment every token with its role. Do not build any pages yet.
 ```
 
 ### 0.8 Documentation Scaffold
+
 **Mode:** Edit
 
 ```text
@@ -230,6 +238,7 @@ classes, and methods. Add explanatory comments to every config file.
 # Phase 1: Authentication & RBAC
 
 ### 1.1 Prisma Schema
+
 **Mode:** Ask
 **Context:** `#file:docs/RBAC_MATRIX.md #file:prisma/schema.prisma`
 
@@ -254,6 +263,7 @@ Do not modify existing models.
 ```
 
 ### 1.2 Migration & Seed
+
 **Mode:** Edit
 
 ```text
@@ -268,6 +278,7 @@ Also give me the commands to migrate and seed.
 ```
 
 ### 1.3 Auth Services
+
 **Mode:** Edit
 **Context:** `#file:prisma/schema.prisma`
 
@@ -288,6 +299,7 @@ Read secrets from ConfigService, never hardcode.
 ```
 
 ### 1.4 Auth Controllers & DTOs
+
 **Mode:** Edit
 
 ```text
@@ -300,6 +312,7 @@ Controllers must only call services. Do not alter AuthService.
 ```
 
 ### 1.5 RBAC Guards
+
 **Mode:** Edit
 **Context:** `#file:docs/RBAC_MATRIX.md`
 
@@ -319,6 +332,7 @@ Do not generate tests in this step.
 ```
 
 ### 1.6 Password Recovery & Email Verification
+
 **Mode:** Edit
 
 ```text
@@ -336,6 +350,7 @@ Use simple HTML email templates. Do not touch the frontend.
 ```
 
 ### 1.7 Auth Tests
+
 **Mode:** Edit
 
 ```text
@@ -351,6 +366,7 @@ list it instead of fixing it.
 ```
 
 ### 1.8 Frontend Auth UI
+
 **Mode:** Edit
 
 ```text
@@ -369,6 +385,7 @@ Comment every component and major JSX section.
 ```
 
 ### 1.9 Document the Phase
+
 **Mode:** Ask
 
 ```text
@@ -394,6 +411,7 @@ modify source code in this step.
 # Phase 2: Core Academic & Student Information System
 
 ### 2.1 Academic Schema
+
 **Mode:** Ask
 **Context:** `#file:prisma/schema.prisma #file:docs/DATABASE_SCHEMA.md`
 
@@ -414,6 +432,7 @@ Do NOT generate APIs. Do not modify auth models.
 ```
 
 ### 2.2 Seed Data
+
 **Mode:** Edit
 
 ```text
@@ -424,6 +443,7 @@ Keep it idempotent and clearly marked as development-only
 ```
 
 ### 2.3 SIS Services
+
 **Mode:** Edit
 
 ```text
@@ -440,6 +460,7 @@ Use Prisma, with transactions where multiple writes occur.
 ```
 
 ### 2.4 SIS Controllers & RBAC
+
 **Mode:** Edit
 **Context:** `#file:docs/RBAC_MATRIX.md`
 
@@ -453,6 +474,7 @@ Do not modify the services.
 ```
 
 ### 2.5 Course Registration Logic
+
 **Mode:** Edit
 
 ```text
@@ -470,6 +492,7 @@ Wrap writes in a transaction. Service only: no controller, no UI.
 ```
 
 ### 2.6 Timetable & Attendance
+
 **Mode:** Edit
 
 ```text
@@ -484,6 +507,7 @@ Services only. Do not generate controllers or UI.
 ```
 
 ### 2.7 Academic Controllers
+
 **Mode:** Edit
 
 ```text
@@ -495,6 +519,7 @@ Do not modify services.
 ```
 
 ### 2.8 Academic Tests
+
 **Mode:** Edit
 
 ```text
@@ -505,6 +530,7 @@ Do not change production code; list bugs instead.
 ```
 
 ### 2.9 Student Portal UI
+
 **Mode:** Edit
 
 ```text
@@ -520,6 +546,7 @@ Comment every component and major JSX section.
 ```
 
 ### 2.10 Registrar UI
+
 **Mode:** Edit
 
 ```text
@@ -534,6 +561,7 @@ Comment every component and major JSX section.
 ```
 
 ### 2.11 Document the Phase
+
 **Mode:** Ask
 
 ```text
@@ -561,6 +589,7 @@ modify source code in this step.
 > **How payments work:** the live process is **physical**. The student pays at the bank; **Finance records the deposit and issues the receipt**. If a student tries to pay online from the system (**card, online bank, mobile money**), the system shows **"Coming soon"**. Each online method has its own flag (`payments.online.card`, `.bank`, `.mobile`), **OFF by default**. Never enable these flags during development; step 3.10 is a deferred activation runbook.
 
 ### 3.0 Feature Flag Infrastructure (Online Payment Switches)
+
 **Mode:** Edit
 **Context:** `#file:prisma/schema.prisma #file:docs/RBAC_MATRIX.md`
 
@@ -591,6 +620,7 @@ Write NO payment logic in this step.
 ```
 
 ### 3.1 Finance Schema
+
 **Mode:** Ask
 **Context:** `#file:prisma/schema.prisma`
 
@@ -618,6 +648,7 @@ Do NOT generate APIs. Do not modify existing models.
 ```
 
 ### 3.2 Fee Structure APIs
+
 **Mode:** Edit
 
 ```text
@@ -633,6 +664,7 @@ RBAC: bursar and admin only. No frontend code.
 ```
 
 ### 3.3 Invoice Generation
+
 **Mode:** Edit
 
 ```text
@@ -648,6 +680,7 @@ Use transactions. Service only; no controller yet.
 ```
 
 ### 3.4 Payment Logic (Bank Deposits Recorded by Finance)
+
 **Mode:** Edit
 
 ```text
@@ -673,6 +706,7 @@ Service only. No controller, no frontend, no online payment code.
 ```
 
 ### 3.5 Finance Tests (Run Before Receipts)
+
 **Mode:** Edit
 
 ```text
@@ -688,6 +722,7 @@ Do not change production code; list any bugs found.
 ```
 
 ### 3.6 Payment Controller
+
 **Mode:** Edit
 
 ```text
@@ -710,6 +745,7 @@ coming-soon 403 while OFF. Do not modify services.
 ```
 
 ### 3.7 Receipt Generation
+
 **Mode:** Edit
 
 ```text
@@ -729,6 +765,7 @@ Add the controller endpoint to fetch it. No frontend.
 ```
 
 ### 3.8 Finance Dashboard UI
+
 **Mode:** Edit
 
 ```text
@@ -747,6 +784,7 @@ Comment every component and major JSX section.
 ```
 
 ### 3.9 Student Financial Statement UI
+
 **Mode:** Edit
 
 ```text
@@ -769,6 +807,7 @@ Comment every component and major JSX section.
 ```
 
 ### 3.10 Online Payment Activation (DEFERRED: run only when a method is approved)
+
 **Mode:** Ask, then Edit
 
 ```text
@@ -793,6 +832,7 @@ Do NOT change any flag value, seed, or environment variable in this step.
 ```
 
 ### 3.11 Document the Phase
+
 **Mode:** Ask
 
 ```text
@@ -822,6 +862,7 @@ modify source code in this step.
 # Phase 4: LMS & Assignment System
 
 ### 4.1 LMS Schema
+
 **Mode:** Ask
 **Context:** `#file:prisma/schema.prisma`
 
@@ -838,6 +879,7 @@ Do NOT generate APIs. Do not model exams (separate phase).
 ```
 
 ### 4.2 Assignment APIs
+
 **Mode:** Edit
 
 ```text
@@ -854,6 +896,7 @@ Apply RBAC per docs/RBAC_MATRIX.md. No frontend.
 ```
 
 ### 4.3 Storage Service
+
 **Mode:** Edit
 
 ```text
@@ -868,6 +911,7 @@ No business logic. Include a short README section on the env variables.
 ```
 
 ### 4.4 File Upload System
+
 **Mode:** Edit
 
 ```text
@@ -882,6 +926,7 @@ No LMS business logic here.
 ```
 
 ### 4.5 Submission Logic
+
 **Mode:** Edit
 
 ```text
@@ -898,6 +943,7 @@ Service and controller. No UI.
 ```
 
 ### 4.6 Teacher Grading System
+
 **Mode:** Edit
 
 ```text
@@ -914,6 +960,7 @@ RBAC: only the owning lecturer may grade. Students see published marks only.
 ```
 
 ### 4.7 LMS Tests
+
 **Mode:** Edit
 
 ```text
@@ -924,6 +971,7 @@ Do not change production code; list bugs.
 ```
 
 ### 4.8 LMS Frontend
+
 **Mode:** Edit
 
 ```text
@@ -940,6 +988,7 @@ Comment every component and major JSX section.
 ```
 
 ### 4.9 Document the Phase
+
 **Mode:** Ask
 
 ```text
@@ -966,6 +1015,7 @@ modify source code in this step.
 # Phase 5: Examination System
 
 ### 5.1 Exam Schema
+
 **Mode:** Ask
 
 ```text
@@ -979,6 +1029,7 @@ Do NOT generate APIs.
 ```
 
 ### 5.2 Exam Creation APIs
+
 **Mode:** Edit
 
 ```text
@@ -990,6 +1041,7 @@ RBAC: lecturer and registrar. No frontend.
 ```
 
 ### 5.3 Restriction Logic
+
 **Mode:** Edit
 **Context:** `#file:apps/api/src/finance/payment.service.ts`
 
@@ -1009,6 +1061,7 @@ Allow registrar override with an audit log entry. Service and unit tests only.
 ```
 
 ### 5.4 Result Publishing
+
 **Mode:** Edit
 
 ```text
@@ -1020,6 +1073,7 @@ All state transitions logged. No frontend.
 ```
 
 ### 5.5 Transcript & GPA
+
 **Mode:** Edit
 
 ```text
@@ -1032,6 +1086,7 @@ Include unit tests for GPA math.
 ```
 
 ### 5.6 Exam Tests
+
 **Mode:** Edit
 
 ```text
@@ -1041,6 +1096,7 @@ GPA with retakes. Do not change production code; list bugs.
 ```
 
 ### 5.7 Examination Frontend
+
 **Mode:** Edit
 
 ```text
@@ -1054,6 +1110,7 @@ Comment every component and major JSX section.
 ```
 
 ### 5.8 Document the Phase
+
 **Mode:** Ask
 
 ```text
@@ -1080,6 +1137,7 @@ modify source code in this step.
 # Phase 6: Reporting & Analytics
 
 ### 6.1 Analytics APIs
+
 **Mode:** Edit
 
 ```text
@@ -1092,6 +1150,7 @@ No frontend.
 ```
 
 ### 6.2 Chart Data Services
+
 **Mode:** Edit
 
 ```text
@@ -1104,6 +1163,7 @@ Return typed DTOs shared via packages/shared.
 ```
 
 ### 6.3 Dashboard UI
+
 **Mode:** Edit
 
 ```text
@@ -1119,6 +1179,7 @@ Comment every component and major JSX section.
 ```
 
 ### 6.4 PDF Report Exports
+
 **Mode:** Edit
 
 ```text
@@ -1131,6 +1192,7 @@ return a signed URL. Add the controller endpoint only.
 ```
 
 ### 6.5 Report Tests
+
 **Mode:** Edit
 
 ```text
@@ -1140,6 +1202,7 @@ Do not modify production code.
 ```
 
 ### 6.6 Document the Phase
+
 **Mode:** Ask
 
 ```text
@@ -1166,6 +1229,7 @@ modify source code in this step.
 # Phase 7: Hardening & Launch
 
 ### 7.1 Security Review
+
 **Mode:** Ask
 **Context:** `#codebase`
 
@@ -1180,6 +1244,7 @@ Do not change any code in this step.
 ```
 
 ### 7.2 Security Fixes
+
 **Mode:** Edit
 
 ```text
@@ -1189,6 +1254,7 @@ Issue: <paste a row from the review table>
 ```
 
 ### 7.3 Audit Logging
+
 **Mode:** Edit
 
 ```text
@@ -1200,6 +1266,7 @@ Logs are append-only and viewable by admin only. Do not log secrets or passwords
 ```
 
 ### 7.4 Performance
+
 **Mode:** Ask
 
 ```text
@@ -1210,6 +1277,7 @@ Explain tradeoffs; do not apply changes yet.
 ```
 
 ### 7.5 Load Test Scripts
+
 **Mode:** Edit
 
 ```text
@@ -1219,6 +1287,7 @@ results-day reads, payment recording. Include thresholds
 ```
 
 ### 7.6 Deployment Pipeline
+
 **Mode:** Edit
 
 ```text
@@ -1231,6 +1300,7 @@ Use GitHub environments and secrets. Include a rollback job.
 ```
 
 ### 7.7 Backups & Monitoring
+
 **Mode:** Edit
 
 ```text
@@ -1240,6 +1310,7 @@ and structured logging with request IDs. Do not change business logic.
 ```
 
 ### 7.8 Documentation
+
 **Mode:** Edit
 
 ```text
@@ -1249,6 +1320,7 @@ short admin guide outline. Do not modify source code.
 ```
 
 ### 7.9 Document the Phase
+
 **Mode:** Ask
 
 ```text
@@ -1275,6 +1347,7 @@ modify source code in this step.
 # Cross-Cutting Utility Prompts
 
 ### Document the Step (use after EVERY micro-phase)
+
 **Mode:** Ask
 
 ```text
@@ -1287,6 +1360,7 @@ limitations. Do not change source code.
 ```
 
 ### Add Comments to Existing Code
+
 **Mode:** Edit
 
 ```text
@@ -1298,6 +1372,7 @@ only repeat the code, skip it.
 ```
 
 ### Comment Review (before committing)
+
 **Mode:** Ask
 
 ```text
@@ -1307,6 +1382,7 @@ no longer matches the code. Output a table: file, line, gap. Do not modify code.
 ```
 
 ### Brand Token Audit
+
 **Mode:** Ask
 
 ```text
@@ -1318,6 +1394,7 @@ Do not modify code.
 ```
 
 ### Fix a Failing Test
+
 **Mode:** Edit
 
 ```text
@@ -1327,6 +1404,7 @@ and do not touch unrelated files. Explain the cause in two sentences.
 ```
 
 ### Explain Before Changing
+
 **Mode:** Ask
 
 ```text
@@ -1335,6 +1413,7 @@ List the data flow and any risks. Do not propose or make changes.
 ```
 
 ### Safe Refactor
+
 **Mode:** Edit
 
 ```text
@@ -1344,6 +1423,7 @@ this file.
 ```
 
 ### Update Context Docs After a Phase
+
 **Mode:** Ask
 
 ```text
@@ -1352,6 +1432,7 @@ out of date. Then produce the updated sections of the document only.
 ```
 
 ### Pull Request Description
+
 **Mode:** Ask
 
 ```text
@@ -1360,6 +1441,7 @@ how to test, risks, and screenshots needed. Keep it under 200 words.
 ```
 
 ### GitHub Issue for the Copilot Coding Agent
+
 **Use as the issue body**
 
 ```text
@@ -1379,12 +1461,12 @@ Context: see docs/ARCHITECTURE.md and .github/copilot-instructions.md
 
 ## Quick Reference: Which Mode Where
 
-| Work | Recommended Mode |
-|---|---|
-| Schema design, architecture, reviews | Ask |
-| Services, controllers, DTOs in named files | Edit |
-| UI pages for existing endpoints | Edit |
-| Isolated test-writing or docs issues | Coding agent (issue → PR) |
-| Multi-file, well-specified task after conventions are stable | Agent |
-| First review of every PR | Copilot code review, plus human review |
-| Step documentation, comment gaps, brand token audits | Ask |
+| Work                                                         | Recommended Mode                       |
+| ------------------------------------------------------------ | -------------------------------------- |
+| Schema design, architecture, reviews                         | Ask                                    |
+| Services, controllers, DTOs in named files                   | Edit                                   |
+| UI pages for existing endpoints                              | Edit                                   |
+| Isolated test-writing or docs issues                         | Coding agent (issue → PR)              |
+| Multi-file, well-specified task after conventions are stable | Agent                                  |
+| First review of every PR                                     | Copilot code review, plus human review |
+| Step documentation, comment gaps, brand token audits         | Ask                                    |

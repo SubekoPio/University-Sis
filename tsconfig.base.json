@@ -1,3 +1,4 @@
+// Purpose: Share strict compiler defaults across all TypeScript workspaces.
 {
   "compilerOptions": {
     "target": "ES2022",

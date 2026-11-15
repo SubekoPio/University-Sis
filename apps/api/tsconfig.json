@@ -1,3 +1,4 @@
+// Purpose: Configure strict API compilation for NestJS, Vitest, and Node.js.
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {

@@ -1,3 +1,4 @@
+// Purpose: Configure strict type-checking and Next.js path resolution for the web app.
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {

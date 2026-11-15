@@ -1,4 +1,7 @@
+# Purpose: Run local PostgreSQL, Redis, and MinIO services for development.
+# Used by: Developers starting the application's local data and storage dependencies.
 services:
+  # PostgreSQL stores SIS records and persists its local data in a named volume.
   postgres:
     image: postgres:16
     restart: unless-stopped
@@ -11,16 +14,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""
-        ]
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 10s
 
+  # Redis supplies the local cache and ephemeral data service.
   redis:
     image: redis:7
     restart: unless-stopped
@@ -32,6 +32,7 @@ services:
       timeout: 3s
       retries: 10
 
+  # MinIO provides S3-compatible local object storage for development.
   minio:
     image: minio/minio:latest
     restart: unless-stopped
@@ -45,16 +46,13 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://127.0.0.1:9000/minio/health/live || exit 1"
-        ]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/live || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 12
       start_period: 10s
 
+  # Create the configured bucket after MinIO reports healthy.
   minio-init:
     image: minio/mc:latest
     depends_on:

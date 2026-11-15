@@ -1,3 +1,4 @@
+// Purpose: Limit production API builds to source files and exclude tests.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {

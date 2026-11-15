@@ -1,0 +1,9 @@
+# Purpose: Exclude generated, dependency, and lock files from Prettier operations.
+node_modules/
+.next/
+.turbo/
+coverage/
+dist/
+out/
+pnpm-lock.yaml
+*.tsbuildinfo

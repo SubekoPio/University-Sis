@@ -5,11 +5,27 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "format": "prettier --config .prettierrc.json --write .",
+    "format:check": "prettier --config .prettierrc.json --check .",
+    "lint": "turbo run lint && eslint --no-config-lookup --config eslint.config.mjs apps packages",
+    "lint:staged": "lint-staged",
+    "commitlint": "commitlint",
+    "prepare": "husky",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "@eslint/js": "^10.0.1",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "eslint": "^10.15.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jsdoc": "^65.4.7",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.10.1",
     "turbo": "^2.11.11",
-    "typescript": "^7.0.2"
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "8.72.2"
   }
 }

@@ -1,3 +1,4 @@
+# Purpose: Define workspace packages and explicitly allow required native build dependencies.
 packages:
   - "apps/*"
   - "packages/*"

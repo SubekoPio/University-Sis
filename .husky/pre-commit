@@ -1,0 +1,2 @@
+# Purpose: Run staged-file lint and formatting checks before creating a commit.
+pnpm lint:staged
