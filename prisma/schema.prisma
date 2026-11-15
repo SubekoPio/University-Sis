@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Lifecycle state of a user account.
+enum UserStatus {
+  /// The account can authenticate.
+  ACTIVE
+
+  /// The account is temporarily prevented from authenticating.
+  SUSPENDED
+
+  /// The account is disabled and cannot authenticate.
+  DISABLED
+}
+
+/// An account identity used to authenticate and authorize access to the SIS.
+model User {
+  /// Stable UUID identifying the account.
+  id                      String                   @id @default(uuid()) @db.Uuid
+  /// Normalized login email address, unique across all accounts.
+  email                   String                   @unique
+  /// Password verifier; plaintext passwords must never be stored.
+  passwordHash            String
+  /// Current account lifecycle state.
+  status                  UserStatus               @default(ACTIVE)
+  /// Roles assigned to this account.
+  roles                   UserRole[]
+  /// Active and historical authentication sessions for this account.
+  sessions                Session[]
+  /// Password recovery tokens issued to this account.
+  passwordResetTokens     PasswordResetToken[]
+  /// Email verification tokens issued to this account.
+  emailVerificationTokens EmailVerificationToken[]
+  /// Time the account was created.
+  createdAt               DateTime                 @default(now())
+  /// Time the account was most recently updated.
+  updatedAt               DateTime                 @updatedAt
+}
+
+/// A named group of permissions assignable to users.
+model Role {
+  /// Stable UUID identifying the role.
+  id          String           @id @default(uuid()) @db.Uuid
+  /// Unique role name, such as `student` or `admin`.
+  name        String           @unique
+  /// Optional explanation of the role's intended responsibility.
+  description String?
+  /// Users assigned this role.
+  users       UserRole[]
+  /// Permissions granted to this role.
+  permissions RolePermission[]
+  /// Time the role was created.
+  createdAt   DateTime         @default(now())
+  /// Time the role was most recently updated.
+  updatedAt   DateTime         @updatedAt
+}
+
+/// A named authorization capability aligned with the RBAC matrix.
+model Permission {
+  /// Stable UUID identifying the permission.
+  id          String           @id @default(uuid()) @db.Uuid
+  /// Unique permission key, for example `auth:profile:read_own`.
+  key         String           @unique
+  /// Optional explanation of the capability represented by the key.
+  description String?
+  /// Roles granted this permission.
+  roles       RolePermission[]
+  /// Time the permission was created.
+  createdAt   DateTime         @default(now())
+  /// Time the permission was most recently updated.
+  updatedAt   DateTime         @updatedAt
+}
+
+/// Join record assigning one role to one user.
+model UserRole {
+  /// User receiving the role assignment.
+  userId    String   @db.Uuid
+  /// Role assigned to the user.
+  roleId    String   @db.Uuid
+  /// User who receives this role; remove the assignment when the user is deleted.
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Role being assigned; remove the assignment when the role is deleted.
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  /// Time the assignment was created.
+  createdAt DateTime @default(now())
+  /// Time the assignment was most recently updated.
+  updatedAt DateTime @updatedAt
+
+  /// Prevent duplicate assignments of the same role to a user.
+  @@id([userId, roleId])
+  /// Support lookup of users assigned to a role.
+  @@index([roleId])
+}
+
+/// Join record granting one permission to one role.
+model RolePermission {
+  /// Role receiving the permission grant.
+  roleId       String     @db.Uuid
+  /// Permission granted to the role.
+  permissionId String     @db.Uuid
+  /// Role receiving this grant; remove the grant when the role is deleted.
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  /// Granted permission; remove the grant when the permission is deleted.
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  /// Time the grant was created.
+  createdAt    DateTime   @default(now())
+  /// Time the grant was most recently updated.
+  updatedAt    DateTime   @updatedAt
+
+  /// Prevent duplicate grants of the same permission to a role.
+  @@id([roleId, permissionId])
+  /// Support lookup of roles that include a permission.
+  @@index([permissionId])
+}
+
+/// A refresh-token-backed authentication session for one user.
+model Session {
+  /// Stable UUID identifying the session.
+  id               String    @id @default(uuid()) @db.Uuid
+  /// User who owns this session.
+  userId           String    @db.Uuid
+  /// Hash of the refresh token; the raw token must not be stored.
+  refreshTokenHash String    @unique
+  /// User-agent string observed when the session was created.
+  userAgent        String?
+  /// IP address observed when the session was created.
+  ip               String?
+  /// Time after which the refresh token is no longer valid.
+  expiresAt        DateTime
+  /// Time the session was revoked, if it has been revoked.
+  revokedAt        DateTime?
+  /// User who owns this session; delete sessions with the user account.
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Time the session was created.
+  createdAt        DateTime  @default(now())
+  /// Time the session was most recently updated.
+  updatedAt        DateTime  @updatedAt
+
+  /// Support listing and cleaning up expired sessions.
+  @@index([expiresAt])
+  /// Support checking expiration for a user's sessions.
+  @@index([userId, expiresAt])
+}
+
+/// A hashed, expiring, single-use password recovery token.
+model PasswordResetToken {
+  /// Stable UUID identifying the recovery token record.
+  id        String    @id @default(uuid()) @db.Uuid
+  /// User for whom the recovery token was issued.
+  userId    String    @db.Uuid
+  /// Hash of the token; the raw token must not be stored.
+  tokenHash String    @unique
+  /// Time after which the token is no longer valid.
+  expiresAt DateTime
+  /// Time the token was consumed, if it has been used.
+  usedAt    DateTime?
+  /// User who owns this token; delete tokens with the user account.
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Time the token record was created.
+  createdAt DateTime  @default(now())
+  /// Time the token record was most recently updated.
+  updatedAt DateTime  @updatedAt
+
+  /// Support locating expired recovery tokens for cleanup.
+  @@index([expiresAt])
+  /// Support listing a user's tokens by expiry.
+  @@index([userId, expiresAt])
+}
+
+/// A hashed, expiring, single-use email verification token.
+model EmailVerificationToken {
+  /// Stable UUID identifying the verification token record.
+  id        String    @id @default(uuid()) @db.Uuid
+  /// User for whom the verification token was issued.
+  userId    String    @db.Uuid
+  /// Hash of the token; the raw token must not be stored.
+  tokenHash String    @unique
+  /// Time after which the token is no longer valid.
+  expiresAt DateTime
+  /// Time the token was consumed, if it has been used.
+  usedAt    DateTime?
+  /// User who owns this token; delete tokens with the user account.
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Time the token record was created.
+  createdAt DateTime  @default(now())
+  /// Time the token record was most recently updated.
+  updatedAt DateTime  @updatedAt
+
+  /// Support locating expired verification tokens for cleanup.
+  @@index([expiresAt])
+  /// Support listing a user's tokens by expiry.
+  @@index([userId, expiresAt])
+}
