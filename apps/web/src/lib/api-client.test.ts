@@ -1,7 +1,14 @@
 // Purpose: Test browser token attachment and refresh-once behavior.
 // Used by: The web package Vitest suite.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiRequest, type AuthResult } from "./api-client";
+import {
+  apiRequest,
+  changeTemporaryPassword,
+  getCurrentAuthUser,
+  getPasswordChangeNotice,
+  login,
+  type AuthResult,
+} from "./api-client";
 
 const SESSION_STORAGE_KEY = "university-sis.auth-session";
 const storedValues = new Map<string, string>();
@@ -14,6 +21,12 @@ const sessionStorageMock = {
     storedValues.delete(key);
   }),
 };
+const windowMock = {
+  sessionStorage: sessionStorageMock,
+  dispatchEvent: vi.fn(() => true),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+};
 const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
 
 /**
@@ -23,7 +36,11 @@ const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promis
  * @param refreshToken - Refresh token saved by the client.
  * @returns A complete auth response that passes the API client guard.
  */
-function createAuthResult(accessToken: string, refreshToken: string): AuthResult {
+function createAuthResult(
+  accessToken: string,
+  refreshToken: string,
+  mustChangePassword?: boolean,
+): AuthResult {
   return {
     accessToken,
     refreshToken,
@@ -34,6 +51,7 @@ function createAuthResult(accessToken: string, refreshToken: string): AuthResult
       email: "student@example.edu",
       status: "ACTIVE",
       emailVerified: true,
+      ...(mustChangePassword === undefined ? {} : { mustChangePassword }),
     },
   };
 }
@@ -68,7 +86,10 @@ describe("apiRequest authentication", () => {
     sessionStorageMock.setItem.mockClear();
     sessionStorageMock.removeItem.mockClear();
     fetchMock.mockReset();
-    vi.stubGlobal("window", { sessionStorage: sessionStorageMock });
+    windowMock.dispatchEvent.mockClear();
+    windowMock.addEventListener.mockClear();
+    windowMock.removeEventListener.mockClear();
+    vi.stubGlobal("window", windowMock);
     vi.stubGlobal("fetch", fetchMock);
   });
 
@@ -167,5 +188,125 @@ describe("apiRequest authentication", () => {
     releaseRefresh();
     await expect(requests).resolves.toEqual([{ ok: true }, { ok: true }]);
     expect(refreshCalls).toBe(1);
+  });
+
+  it("uses the login password-change flag without refreshing the session", async () => {
+    const forcedChangeResult = createAuthResult("temporary-access", "temporary-refresh", true);
+    fetchMock.mockResolvedValueOnce(jsonResponse(forcedChangeResult));
+
+    await expect(
+      login({ email: "student@example.edu", password: "temporary-password" }),
+    ).resolves.toEqual(forcedChangeResult);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getCurrentAuthUser()?.mustChangePassword).toBe(true);
+  });
+
+  it("probes the server gate when a successful login omits the password-change flag", async () => {
+    const refreshedResult = createAuthResult("access-refreshed", "refresh-refreshed");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(createAuthResult("access-login", "refresh-login")))
+      .mockResolvedValueOnce(jsonResponse(refreshedResult));
+
+    await expect(
+      login({ email: "student@example.edu", password: "correct-password" }),
+    ).resolves.toEqual(refreshedResult);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe("http://localhost:3001/auth/refresh");
+    expect(getCurrentAuthUser()?.mustChangePassword).toBeUndefined();
+  });
+
+  it("detects a required password change from the API gate when login omits its flag", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(createAuthResult("access", "refresh")))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            code: "MUST_CHANGE_PASSWORD",
+            message: "Change your temporary password before accessing this endpoint.",
+          },
+          403,
+        ),
+      );
+
+    await expect(
+      login({ email: "student@example.edu", password: "temporary-password" }),
+    ).rejects.toMatchObject({ code: "MUST_CHANGE_PASSWORD" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(getCurrentAuthUser()?.mustChangePassword).toBe(true);
+    expect(getPasswordChangeNotice()).toBe(
+      "Change your temporary password before accessing this endpoint.",
+    );
+  });
+
+  it("marks an existing session for password change when a protected API request requires it", async () => {
+    sessionStorageMock.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify(createAuthResult("access-old", "refresh-old")),
+    );
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          code: "MUST_CHANGE_PASSWORD",
+          message: "Your temporary password has expired. Contact an administrator.",
+        },
+        403,
+      ),
+    );
+
+    await expect(apiRequest("/protected")).rejects.toMatchObject({
+      code: "MUST_CHANGE_PASSWORD",
+    });
+
+    expect(getCurrentAuthUser()?.mustChangePassword).toBe(true);
+    expect(getPasswordChangeNotice()).toBe(
+      "Your temporary password has expired. Contact an administrator.",
+    );
+  });
+
+  it("clears the forced-change flag and notice after a successful password change", async () => {
+    sessionStorageMock.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify(createAuthResult("access-current", "refresh-current", true)),
+    );
+    sessionStorageMock.setItem(
+      "university-sis.password-change-notice",
+      "Change your temporary password before accessing this endpoint.",
+    );
+    fetchMock.mockResolvedValueOnce(jsonResponse({ message: "Password changed successfully." }));
+
+    await expect(
+      changeTemporaryPassword({
+        currentPassword: "temporary-password",
+        newPassword: "replacement-password",
+      }),
+    ).resolves.toEqual({ message: "Password changed successfully." });
+
+    expect(getCurrentAuthUser()?.mustChangePassword).toBe(false);
+    expect(getPasswordChangeNotice()).toBeNull();
+    const requestHeaders = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    expect(requestHeaders.get("Authorization")).toBe("Bearer access-current");
+  });
+
+  it("preserves the administrator-contact message for an expired login password", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          code: "UNAUTHORIZED",
+          message: "Your temporary password has expired. Contact an administrator.",
+        },
+        401,
+      ),
+    );
+
+    await expect(
+      login({ email: "student@example.edu", password: "temporary-password" }),
+    ).rejects.toMatchObject({
+      status: 401,
+      message: "Your temporary password has expired. Contact an administrator.",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

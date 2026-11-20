@@ -1,9 +1,9 @@
 # Database Schema
 
 **Status:** Draft logical model for human review; the initial authentication and
-RBAC migration has been applied to the local development database. The
-email-verification migration is generated but has not been applied.
-**Last updated:** 2026-11-15
+RBAC migration is applied locally. The email-verification, user-lifecycle, and
+admin-user-management migrations are generated but not yet applied.
+**Last updated:** 2026-11-20
 
 ## Purpose and implementation status
 
@@ -12,12 +12,12 @@ and the invariants that future Prisma models and migrations must preserve. The
 architecture uses PostgreSQL as the relational source of truth and Prisma for
 data access ([architecture](./ARCHITECTURE.md)).
 
-The authentication and RBAC models are defined in
+The authentication, RBAC, user-lifecycle, and audit models are defined in
 [`prisma/schema.prisma`](../prisma/schema.prisma), with migrations under
 `prisma/migrations/`. The initial authentication and RBAC migration is applied
-in the local development setup; the follow-up email-verification migration
-still needs to be applied. All other models and relationships below remain
-planned.
+in the local development setup; the email-verification, user-lifecycle, and
+admin-user-management migrations are generated but still need to be applied.
+Other proposed models and relationships below remain planned.
 
 The [RBAC matrix](./RBAC_MATRIX.md) is the authorization source of truth.
 Database relationships help resolve record ownership and scope, but do not
@@ -46,26 +46,51 @@ replace API authorization or service-level checks.
 
 ### Authentication and RBAC
 
-| Model                    | Purpose and relationships                                                                       | Key constraints                                                                                            |
-| ------------------------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `User`                   | Identity and account status; parent of role assignments, sessions, and token records.           | UUID primary key; unique normalized login email; password hash only; email verification defaults to false. |
-| `Role`                   | Named application roles, including `student`, `lecturer`, `bursar`, `registrar`, and `admin`.   | UUID primary key; unique role name.                                                                        |
-| `Permission`             | Permission keys aligned with the RBAC matrix, such as `finance:payment:record_bank_deposit`.    | UUID primary key; unique permission key.                                                                   |
-| `UserRole`               | Join between users and roles.                                                                   | Composite primary key `(userId, roleId)`.                                                                  |
-| `RolePermission`         | Join between roles and permissions.                                                             | Composite primary key `(roleId, permissionId)`.                                                            |
-| `Session`                | Refresh-token hash and session metadata, including user agent, IP, expiry, and revocation time. | Unique token hash; indexes on `userId` and expiry.                                                         |
-| `PasswordResetToken`     | Hashed, expiring, single-use password recovery token.                                           | Unique token hash; indexes on `userId` and expiry.                                                         |
-| `EmailVerificationToken` | Hashed, expiring, single-use email verification token.                                          | Unique token hash; indexes on `userId` and expiry.                                                         |
+| Model                    | Purpose and relationships                                                                                                      | Key constraints                                                                                                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `User`                   | Identity, display name, account lifecycle, and password-change state; parent of role assignments, sessions, and token records. | UUID primary key; unique normalized login email; password hash only; existing users default to `mustChangePassword = false`; optional name, temporary-password expiry, and creator/deactivator references. |
+| `Role`                   | Named application roles, including `student`, `lecturer`, `bursar`, `registrar`, and `admin`.                                  | UUID primary key; unique role name.                                                                                                                                                                        |
+| `Permission`             | Permission keys aligned with the RBAC matrix, such as `finance:payment:record_bank_deposit`.                                   | UUID primary key; unique permission key.                                                                                                                                                                   |
+| `UserRole`               | Join between users and roles.                                                                                                  | Composite primary key `(userId, roleId)`.                                                                                                                                                                  |
+| `RolePermission`         | Join between roles and permissions.                                                                                            | Composite primary key `(roleId, permissionId)`.                                                                                                                                                            |
+| `Session`                | Refresh-token hash and session metadata, including user agent, IP, expiry, and revocation time.                                | Unique token hash; indexes on `userId` and expiry.                                                                                                                                                         |
+| `PasswordResetToken`     | Hashed, expiring, single-use password recovery token.                                                                          | Unique token hash; indexes on `userId` and expiry.                                                                                                                                                         |
+| `EmailVerificationToken` | Hashed, expiring, single-use email verification token.                                                                         | Unique token hash; indexes on `userId` and expiry.                                                                                                                                                         |
+| `AuditLog`               | Immutable record of a sensitive action, actor, and affected resource.                                                          | Nullable actor reference uses `SetNull`; indexed by actor/time and resource/time; never stores credentials.                                                                                                |
 
-All authentication and RBAC records have `createdAt` and `updatedAt` fields.
+Mutable authentication and RBAC records have `createdAt` and `updatedAt`;
+immutable audit records have `createdAt` only.
 Foreign-key relations specify deletion behavior: deleting a user cascades to its
 role assignments, sessions, and authentication tokens; deleting a role or
 permission cascades only to its corresponding join records. The Prisma schema
-uses `ACTIVE`, `SUSPENDED`, and `DISABLED` for `UserStatus`; login requires
-`User.emailVerified` to be true, and verification tokens are single-use and
-expire after 24 hours. Password-reset tokens are single-use and expire after
-one hour. Role/permission grants must be checked against the matrix and must
-not broaden record scope.
+uses `ACTIVE`, `SUSPENDED`, `DISABLED`, and `DEACTIVATED` for `UserStatus`.
+`mustChangePassword` defaults to `false`, so existing accounts retain that
+value when the field is added. `temporaryPasswordExpiresAt` is nullable.
+`name` is nullable for existing accounts; administrator-created users require a
+name.
+`createdById` and `deactivatedById` are nullable self-relations to `User` with
+`onDelete: SetNull`; deleting an actor does not delete the affected accounts.
+Indexes support expiry and reverse lookups by creator/deactivator. Login
+requires `User.emailVerified` to be true. Admin-provisioned accounts remain
+unverified until their credential email is accepted by the configured
+`EmailService`. Verification tokens are single-use and expire after 24 hours.
+Password-reset tokens are single-use and expire after one hour.
+There is no public account-registration endpoint; administrators create staff
+accounts and students are admitted. A user with `mustChangePassword = true`
+can use only `POST /auth/change-password` or logout while the session is active.
+The temporary password must be unexpired; a missing or expired expiry requires
+administrator assistance. Password change verifies the temporary password,
+rejects reuse, clears the forced-change state and expiry, marks the email
+verified, and revokes every other session atomically while preserving the
+session used for the change. The existing password policy is non-empty and at
+most 1024 characters; no additional strength rule is implied here.
+Role/permission grants must be checked against the matrix and must not broaden
+record scope.
+
+`AuditLog` records are append-only and must preserve sensitive action history
+when an actor is deleted. Structured metadata may identify changed role IDs or
+email-delivery outcomes, but must never contain a password, token, or secret.
+The application writes audit records and exposes no update/delete operation.
 
 ### Student information and academic structure
 
@@ -227,7 +252,6 @@ and payment allocation.
 
 ## Decisions still required
 
-- Whether `UserStatus` values should change before the first migration.
 - Institution/tenant boundaries and whether an `Institution` model is needed.
 - Final academic-year, term, program, course, offering, enrollment, and retake
   cardinalities.
@@ -236,6 +260,7 @@ and payment allocation.
 - Currency support and the relationship between currency codes and minor-unit
   scales.
 - A transaction-safe strategy for sequential, gap-free receipt numbers.
-- Final status enums, attendance uniqueness, and archival/deletion policies.
+- Final academic workflow status enums, attendance uniqueness, and
+  archival/deletion policies.
 - Retention and redaction policy for IP addresses, authentication metadata,
   and audit records.

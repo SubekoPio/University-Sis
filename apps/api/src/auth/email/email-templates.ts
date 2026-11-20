@@ -28,6 +28,37 @@ export function createEmailVerificationEmail(token: string): string {
   ].join("");
 }
 
+/** Renders a one-time credential email for an administrator-provisioned account. */
+export function createTemporaryCredentialsEmail(input: {
+  name: string;
+  email: string;
+  temporaryPassword: string;
+  loginUrl: string;
+  expiresAt: Date | null;
+}): string {
+  const safeName = escapeHtml(input.name);
+  const safeEmail = escapeHtml(input.email);
+  const safePassword = escapeHtml(input.temporaryPassword);
+  const safeLoginUrl = escapeHtml(input.loginUrl);
+  const expiryText =
+    input.expiresAt === null
+      ? ""
+      : `<p>This temporary password expires at ${escapeHtml(input.expiresAt.toISOString())}.</p>`;
+
+  return [
+    "<!doctype html>",
+    "<html><body>",
+    `<p>Hello ${safeName},</p>`,
+    "<p>An administrator created your University SIS account.</p>",
+    `<p>Sign in at <a href="${safeLoginUrl}">${safeLoginUrl}</a>.</p>`,
+    `<p>Email: <code>${safeEmail}</code></p>`,
+    `<p>Temporary password: <code>${safePassword}</code></p>`,
+    "<p>You must choose a new password after signing in.</p>",
+    expiryText,
+    "</body></html>",
+  ].join("");
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")

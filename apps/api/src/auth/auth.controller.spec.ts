@@ -1,15 +1,17 @@
 // Purpose: Test authentication endpoint validation, delegation, and throttling.
-import { INestApplication, ValidationPipe } from "@nestjs/common";
+import { ExecutionContext, INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { UserStatus } from "@prisma/client";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpExceptionFilter } from "../common/http-exception.filter.js";
+import { JwtAuthGuard } from "../common/rbac/jwt-auth.guard.js";
+import type { AuthenticatedRequest } from "../common/rbac/rbac.types.js";
 import { AuthController } from "./auth.controller.js";
 import { AuthService } from "./auth.service.js";
 import { PasswordRecoveryService } from "./password-recovery.service.js";
-import type { AuthResult, RegistrationResult } from "./auth.types.js";
+import type { AuthResult } from "./auth.types.js";
 
 const authResult: AuthResult = {
   accessToken: "signed-access-token",
@@ -24,19 +26,23 @@ const authResult: AuthResult = {
   },
 };
 
-const registrationResult: RegistrationResult = {
-  id: authResult.user.id,
-  email: authResult.user.email,
-  status: UserStatus.ACTIVE,
-  emailVerified: false,
-  createdAt: new Date("2026-01-01T00:00:00.000Z"),
-};
-
 const authServiceMock = {
   login: vi.fn<AuthService["login"]>(),
-  register: vi.fn<AuthService["register"]>(),
   refreshToken: vi.fn<AuthService["refreshToken"]>(),
   logout: vi.fn<AuthService["logout"]>(),
+  changeTemporaryPassword: vi.fn<AuthService["changeTemporaryPassword"]>(),
+};
+
+const jwtAuthGuardMock = {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    request.user = {
+      id: authResult.user.id,
+      email: authResult.user.email,
+      sessionId: "current-session",
+    };
+    return true;
+  },
 };
 
 const passwordRecoveryServiceMock = {
@@ -52,9 +58,9 @@ describe("AuthController", () => {
   beforeEach(async () => {
     vi.resetAllMocks();
     authServiceMock.login.mockResolvedValue(authResult);
-    authServiceMock.register.mockResolvedValue(registrationResult);
     authServiceMock.refreshToken.mockResolvedValue(authResult);
     authServiceMock.logout.mockResolvedValue();
+    authServiceMock.changeTemporaryPassword.mockResolvedValue();
     passwordRecoveryServiceMock.forgotPassword.mockResolvedValue({
       message: "If an account exists for that email, reset instructions will be sent.",
     });
@@ -64,7 +70,7 @@ describe("AuthController", () => {
       message: "If the account exists and needs verification, instructions will be sent.",
     });
 
-    const moduleRef = await Test.createTestingModule({
+    const moduleBuilder = Test.createTestingModule({
       imports: [ThrottlerModule.forRoot([{ ttl: 60_000, limit: 5 }])],
       controllers: [AuthController],
       providers: [
@@ -74,7 +80,11 @@ describe("AuthController", () => {
           useValue: passwordRecoveryServiceMock,
         },
       ],
-    }).compile();
+    });
+    const moduleRef = await moduleBuilder
+      .overrideGuard(JwtAuthGuard)
+      .useValue(jwtAuthGuardMock)
+      .compile();
 
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(
@@ -131,19 +141,15 @@ describe("AuthController", () => {
     );
   });
 
-  it("delegates registration, refresh, and logout requests to the service", async () => {
-    // Arrange: prepare valid bodies for each session/account endpoint.
-    const registrationBody = {
-      email: "new@example.test",
-      password: "valid-password",
-    };
+  it("returns 404 for public registration and delegates refresh and logout", async () => {
+    // Arrange: prepare valid bodies for the remaining session endpoints.
     const refreshBody = { refreshToken: "opaque-refresh-token" };
 
-    // Act: call the remaining authentication endpoints.
+    // Act: verify registration is absent and exercise refresh and logout.
     const registrationResponse = await request(app.getHttpServer())
       .post("/auth/register")
-      .send(registrationBody)
-      .expect(201);
+      .send({ email: "new@example.test", password: "valid-password" })
+      .expect(404);
     const refreshResponse = await request(app.getHttpServer())
       .post("/auth/refresh")
       .send(refreshBody)
@@ -153,13 +159,8 @@ describe("AuthController", () => {
       .send(refreshBody)
       .expect(200);
 
-    // Assert: endpoints delegate the validated fields and return stable results.
-    expect(registrationResponse.body).toMatchObject({
-      id: registrationResult.id,
-      email: registrationResult.email,
-      status: registrationResult.status,
-    });
-    expect(authServiceMock.register).toHaveBeenCalledWith(registrationBody);
+    // Assert: the missing route does not create an account; other routes delegate as before.
+    expect(registrationResponse.body.code).toBe("NOT_FOUND");
     expect(refreshResponse.body).toEqual(authResult);
     expect(authServiceMock.refreshToken).toHaveBeenCalledWith(
       refreshBody.refreshToken,
@@ -169,20 +170,48 @@ describe("AuthController", () => {
     expect(authServiceMock.logout).toHaveBeenCalledWith(refreshBody.refreshToken);
   });
 
-  it("rate-limits both login and registration after five requests per minute", async () => {
+  it("delegates a forced password change using the authenticated session identity", async () => {
+    // Arrange: prepare a valid current and replacement password.
+    const body = {
+      currentPassword: "temporary-password",
+      newPassword: "replacement-password",
+    };
+
+    // Act: submit the password change through the authenticated route.
+    const response = await request(app.getHttpServer())
+      .post("/auth/change-password")
+      .send(body)
+      .expect(200);
+
+    // Assert: the controller forwards the authenticated account and session IDs.
+    expect(response.body).toEqual({
+      message: "Password changed successfully.",
+    });
+    expect(authServiceMock.changeTemporaryPassword).toHaveBeenCalledWith(
+      authResult.user.id,
+      "current-session",
+      body.currentPassword,
+      body.newPassword,
+    );
+  });
+
+  it("rate-limits login and password change after five requests per minute", async () => {
     // Arrange: prepare valid bodies for each throttled endpoint.
     const endpointBodies = [
       ["/auth/login", { email: "student@example.test", password: "valid-password" }],
-      ["/auth/register", { email: "new@example.test", password: "valid-password" }],
+      [
+        "/auth/change-password",
+        {
+          currentPassword: "temporary-password",
+          newPassword: "replacement-password",
+        },
+      ],
     ] as const;
 
     // Act / Assert: each endpoint allows five requests and rejects the sixth uniformly.
     for (const [path, body] of endpointBodies) {
       for (let attempt = 0; attempt < 5; attempt += 1) {
-        await request(app.getHttpServer())
-          .post(path)
-          .send(body)
-          .expect(path === "/auth/login" ? 200 : 201);
+        await request(app.getHttpServer()).post(path).send(body).expect(200);
       }
 
       const response = await request(app.getHttpServer()).post(path).send(body).expect(429);
@@ -195,6 +224,29 @@ describe("AuthController", () => {
       });
       expect(typeof response.body.message).toBe("string");
     }
+  });
+
+  it("validates the change-password DTO before calling the service", async () => {
+    // Arrange: include an empty password and an unknown field.
+    const body = {
+      currentPassword: "temporary-password",
+      newPassword: "",
+      unexpected: true,
+    };
+
+    // Act: submit a malformed forced-password-change request.
+    const response = await request(app.getHttpServer())
+      .post("/auth/change-password")
+      .send(body)
+      .expect(400);
+
+    // Assert: DTO validation rejects it before service delegation.
+    expect(response.body).toMatchObject({
+      statusCode: 400,
+      code: "VALIDATION_ERROR",
+      path: "/auth/change-password",
+    });
+    expect(authServiceMock.changeTemporaryPassword).not.toHaveBeenCalled();
   });
 
   it("delegates recovery and verification endpoints to their service", async () => {

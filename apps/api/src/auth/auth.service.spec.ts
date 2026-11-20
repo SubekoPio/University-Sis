@@ -1,5 +1,5 @@
 // Purpose: Test authentication service token and session lifecycle behavior.
-import { UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { Test, TestingModule } from "@nestjs/testing";
@@ -24,6 +24,8 @@ const activeUser: AuthenticationUser = {
   passwordHash: "argon2-hash",
   status: UserStatus.ACTIVE,
   emailVerified: true,
+  mustChangePassword: false,
+  temporaryPasswordExpiresAt: null,
 };
 
 const asSession = (session: NewAuthenticationSession): AuthenticationSession => ({
@@ -44,6 +46,7 @@ const authRepositoryMock = {
   rotateSession: vi.fn<AuthRepository["rotateSession"]>(),
   revokeSession: vi.fn<AuthRepository["revokeSession"]>(),
   revokeAllUserSessions: vi.fn<AuthRepository["revokeAllUserSessions"]>(),
+  completeTemporaryPasswordChange: vi.fn<AuthRepository["completeTemporaryPasswordChange"]>(),
 };
 
 const passwordHashingMock = {
@@ -197,6 +200,145 @@ describe("AuthService", () => {
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(authRepositoryMock.createSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects expired temporary credentials with administrator guidance", async () => {
+    // Arrange: provide a correct temporary password whose expiry has passed.
+    usersServiceMock.findForAuthenticationByEmail.mockResolvedValue({
+      ...activeUser,
+      mustChangePassword: true,
+      temporaryPasswordExpiresAt: new Date(Date.now() - 1),
+    });
+    passwordHashingMock.verifyPassword.mockResolvedValue(true);
+
+    // Act / Assert: refuse to create a session and direct the user to an administrator.
+    await expect(
+      authService.login({
+        email: activeUser.email,
+        password: "temporary-password",
+      }),
+    ).rejects.toThrow("Your temporary password has expired. Contact an administrator.");
+    expect(authRepositoryMock.createSession).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when a forced-change account has no expiry", async () => {
+    // Arrange: provide a correct temporary password without an expiry timestamp.
+    usersServiceMock.findForAuthenticationByEmail.mockResolvedValue({
+      ...activeUser,
+      mustChangePassword: true,
+      temporaryPasswordExpiresAt: null,
+    });
+    passwordHashingMock.verifyPassword.mockResolvedValue(true);
+
+    // Act / Assert: treat missing expiry as expired and create no session.
+    await expect(
+      authService.login({
+        email: activeUser.email,
+        password: "temporary-password",
+      }),
+    ).rejects.toThrow("Your temporary password has expired. Contact an administrator.");
+    expect(authRepositoryMock.createSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects refresh-token rotation while a temporary password change is required", async () => {
+    // Arrange: provide an active refresh session for a forced-change account.
+    const token = "temporary-account-refresh-token";
+    authRepositoryMock.findByRefreshTokenHash.mockResolvedValue({
+      id: "temporary-session",
+      userId: activeUser.id,
+      refreshTokenHash: refreshTokenHash(token),
+      userAgent: null,
+      ip: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+    });
+    usersServiceMock.findForAuthenticationById.mockResolvedValue({
+      ...activeUser,
+      mustChangePassword: true,
+      temporaryPasswordExpiresAt: new Date(Date.now() + 60_000),
+    });
+
+    // Act / Assert: deny refresh with the stable forced-change error code.
+    await expect(authService.refreshToken(token)).rejects.toMatchObject({
+      response: { code: "MUST_CHANGE_PASSWORD" },
+    });
+    expect(authRepositoryMock.rotateSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects reuse of the temporary password without changing persistence", async () => {
+    // Arrange: authenticate a forced-change account and treat the replacement as reused.
+    usersServiceMock.findForAuthenticationById.mockResolvedValue({
+      ...activeUser,
+      mustChangePassword: true,
+      temporaryPasswordExpiresAt: new Date(Date.now() + 60_000),
+    });
+    passwordHashingMock.verifyPassword.mockResolvedValue(true);
+
+    // Act / Assert: require a different password before persistence is called.
+    await expect(
+      authService.changeTemporaryPassword(
+        activeUser.id,
+        "current-session",
+        "temporary-password",
+        "temporary-password",
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(authRepositoryMock.completeTemporaryPasswordChange).not.toHaveBeenCalled();
+  });
+
+  it("changes an unexpired temporary password and preserves the current session ID", async () => {
+    // Arrange: accept the temporary password, reject reuse, and prepare the new hash.
+    usersServiceMock.findForAuthenticationById.mockResolvedValue({
+      ...activeUser,
+      mustChangePassword: true,
+      temporaryPasswordExpiresAt: new Date(Date.now() + 60_000),
+    });
+    passwordHashingMock.verifyPassword.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    passwordHashingMock.hashPassword.mockResolvedValue("replacement-argon2-hash");
+    authRepositoryMock.completeTemporaryPasswordChange.mockResolvedValue(true);
+
+    // Act: change the password using the current temporary password.
+    await authService.changeTemporaryPassword(
+      activeUser.id,
+      "current-session",
+      "temporary-password",
+      "replacement-password",
+    );
+
+    // Assert: persistence receives only the new hash and the current session identifier.
+    expect(authRepositoryMock.completeTemporaryPasswordChange).toHaveBeenCalledWith(
+      activeUser.id,
+      "current-session",
+      activeUser.passwordHash,
+      "replacement-argon2-hash",
+      expect.any(Date),
+    );
+  });
+
+  it("rejects an expired temporary password change with administrator guidance", async () => {
+    // Arrange: authenticate a temporary password after its expiry.
+    usersServiceMock.findForAuthenticationById.mockResolvedValue({
+      ...activeUser,
+      mustChangePassword: true,
+      temporaryPasswordExpiresAt: new Date(Date.now() - 1),
+    });
+    passwordHashingMock.verifyPassword.mockResolvedValue(true);
+
+    // Act / Assert: refuse the change and preserve the forced-change state.
+    await expect(
+      authService.changeTemporaryPassword(
+        activeUser.id,
+        "current-session",
+        "temporary-password",
+        "replacement-password",
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        code: "MUST_CHANGE_PASSWORD",
+        message: "Your temporary password has expired. Contact an administrator.",
+      },
+    });
+    expect(authRepositoryMock.completeTemporaryPasswordChange).not.toHaveBeenCalled();
   });
 
   it("rotates the refresh token and revokes the old session atomically", async () => {

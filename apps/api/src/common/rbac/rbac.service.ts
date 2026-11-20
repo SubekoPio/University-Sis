@@ -50,6 +50,11 @@ export class RbacService {
     return snapshot;
   }
 
+  /** Removes a user's cached permission snapshot after role assignments change. */
+  async invalidateAuthorizationSnapshot(userId: string): Promise<void> {
+    await this.cache.delete(this.cacheKey(userId));
+  }
+
   /** Checks whether a signed access token refers to a live, unrevoked session. */
   isActiveSession(userId: string, sessionId: string): Promise<boolean> {
     return this.repository.isActiveSession(userId, sessionId, new Date());

@@ -7,6 +7,7 @@ export interface AuthUser {
   email: string;
   status: "ACTIVE" | "SUSPENDED" | "DISABLED";
   emailVerified: boolean;
+  mustChangePassword?: boolean;
 }
 
 /** Access and refresh token pair returned by login and refresh endpoints. */
@@ -54,12 +55,17 @@ interface ApiErrorPayload {
 }
 
 const SESSION_STORAGE_KEY = "university-sis.auth-session";
+const PASSWORD_CHANGE_NOTICE_KEY = "university-sis.password-change-notice";
+const MUST_CHANGE_PASSWORD_CODE = "MUST_CHANGE_PASSWORD";
+const AUTH_STATE_CHANGE_EVENT = "university-sis:auth-state-change";
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001").replace(
   /\/+$/,
   "",
 );
 
 let refreshInFlight: Promise<string | null> | null = null;
+let cachedAuthUserStorageValue: string | null | undefined;
+let cachedAuthUser: AuthUser | null = null;
 
 /**
  * Sends an API request, attaching the current access token and retrying once
@@ -86,8 +92,50 @@ export async function login(credentials: { email: string; password: string }): P
     throw new ApiError("The API returned an invalid login response.", 502, null);
   }
 
+  clearPasswordChangeNotice();
   saveAuthSession(result);
-  return result;
+  if (result.user.mustChangePassword !== undefined) {
+    return result;
+  }
+
+  // The current API omits this flag, so refresh probes the enforced gate without a protected feature endpoint.
+  try {
+    const refreshedAccessToken = await performRefresh();
+    const refreshedSession = readAuthSession();
+    if (refreshedAccessToken === null || refreshedSession === null) {
+      throw new ApiError("Your sign-in session could not be confirmed.", 401, null);
+    }
+
+    return refreshedSession;
+  } catch (error: unknown) {
+    if (!(error instanceof ApiError && error.code === MUST_CHANGE_PASSWORD_CODE)) {
+      clearAuthSession();
+    }
+    throw error;
+  }
+}
+
+/**
+ * Changes the signed-in user's temporary password.
+ *
+ * @param input - The current temporary password and its replacement.
+ * @returns API confirmation message.
+ */
+export async function changeTemporaryPassword(input: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<MessageResponse> {
+  const response = await postJson<MessageResponse>("/auth/change-password", input, false);
+  const session = readAuthSession();
+  if (session !== null) {
+    saveAuthSession({
+      ...session,
+      user: { ...session.user, mustChangePassword: false },
+    });
+  }
+  clearPasswordChangeNotice();
+
+  return response;
 }
 
 /**
@@ -143,6 +191,7 @@ export async function logout(): Promise<void> {
     );
   } finally {
     clearAuthSession();
+    clearPasswordChangeNotice();
   }
 }
 
@@ -155,6 +204,69 @@ export async function logout(): Promise<void> {
  */
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
+}
+
+/**
+ * Reads the safe identity from the current browser session.
+ *
+ * @returns The signed-in user's public details, or null when no session exists.
+ */
+export function getCurrentAuthUser(): AuthUser | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const storedValue = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+  if (storedValue === cachedAuthUserStorageValue) {
+    return cachedAuthUser;
+  }
+
+  const session = readAuthSession();
+  cachedAuthUserStorageValue = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+  cachedAuthUser = session?.user ?? null;
+  return cachedAuthUser;
+}
+
+/**
+ * Subscribes to same-tab and cross-tab authentication changes.
+ *
+ * @param onChange - Called when the browser session or password-change notice changes.
+ * @returns A cleanup function for the event listeners.
+ */
+export function subscribeToAuthState(onChange: () => void): () => void {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  window.addEventListener(AUTH_STATE_CHANGE_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(AUTH_STATE_CHANGE_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+/**
+ * Reads a saved notice explaining why a password change is required.
+ *
+ * @returns The API notice, or null when no notice was recorded.
+ */
+export function getPasswordChangeNotice(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.sessionStorage.getItem(PASSWORD_CHANGE_NOTICE_KEY);
+}
+
+/**
+ * Clears a previously displayed forced-password-change notice.
+ */
+export function clearPasswordChangeNotice(): void {
+  if (typeof window !== "undefined") {
+    window.sessionStorage.removeItem(PASSWORD_CHANGE_NOTICE_KEY);
+    notifyAuthStateChanged();
+  }
 }
 
 async function postJson<T>(path: string, body: unknown, retryOnUnauthorized: boolean): Promise<T> {
@@ -204,7 +316,9 @@ async function requestJson<T>(
   }
 
   if (!response.ok) {
-    throw await createApiError(response);
+    const error = await createApiError(response);
+    redirectForPasswordChange(error, path);
+    throw error;
   }
 
   if (response.status === 204) {
@@ -245,7 +359,9 @@ async function performRefresh(): Promise<string | null> {
     return null;
   }
   if (!response.ok) {
-    throw await createApiError(response);
+    const error = await createApiError(response);
+    redirectForPasswordChange(error, "/auth/refresh");
+    throw error;
   }
 
   const result: unknown = await response.json();
@@ -324,13 +440,44 @@ function saveAuthSession(session: AuthSession): void {
     throw new Error("Authentication sessions can only be saved in a browser.");
   }
 
-  window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  const serializedSession = JSON.stringify(session);
+  window.sessionStorage.setItem(SESSION_STORAGE_KEY, serializedSession);
+  cachedAuthUserStorageValue = serializedSession;
+  cachedAuthUser = session.user;
+  notifyAuthStateChanged();
 }
 
 function clearAuthSession(): void {
   if (typeof window !== "undefined") {
     window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    cachedAuthUserStorageValue = null;
+    cachedAuthUser = null;
+    notifyAuthStateChanged();
   }
+}
+
+function redirectForPasswordChange(error: ApiError, requestPath: string): void {
+  if (
+    error.code !== MUST_CHANGE_PASSWORD_CODE ||
+    typeof window === "undefined" ||
+    normalizePath(requestPath).replace(/\/+$/, "") === "/auth/change-password"
+  ) {
+    return;
+  }
+
+  const session = readAuthSession();
+  if (session !== null) {
+    saveAuthSession({
+      ...session,
+      user: { ...session.user, mustChangePassword: true },
+    });
+  }
+  window.sessionStorage.setItem(PASSWORD_CHANGE_NOTICE_KEY, error.message);
+  notifyAuthStateChanged();
+}
+
+function notifyAuthStateChanged(): void {
+  window.dispatchEvent(new Event(AUTH_STATE_CHANGE_EVENT));
 }
 
 function isAuthResult(value: unknown): value is AuthResult {
@@ -361,7 +508,8 @@ function isAuthUser(value: unknown): value is AuthUser {
     "status" in value &&
     (value.status === "ACTIVE" || value.status === "SUSPENDED" || value.status === "DISABLED") &&
     "emailVerified" in value &&
-    typeof value.emailVerified === "boolean"
+    typeof value.emailVerified === "boolean" &&
+    (!("mustChangePassword" in value) || typeof value.mustChangePassword === "boolean")
   );
 }
 

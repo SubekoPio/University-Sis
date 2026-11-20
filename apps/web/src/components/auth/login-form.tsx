@@ -6,10 +6,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { LoaderCircle } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { getApiErrorMessage, login } from "@/lib/api-client";
+import { ApiError, getApiErrorMessage, login } from "@/lib/api-client";
 import { AuthField } from "@/components/auth/auth-field";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { Button } from "@/components/ui/button";
@@ -33,31 +33,33 @@ type LoginFormValues = z.infer<typeof loginSchema>;
  * @returns A credential form connected to the authentication API.
  */
 export function LoginForm() {
-  const [success, setSuccess] = useState(false);
+  const router = useRouter();
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
   const mutation = useMutation({
     mutationFn: login,
-    onSuccess: () => setSuccess(true),
+    onSuccess: (result) => {
+      router.replace(result.user.mustChangePassword === true ? "/change-password" : "/");
+    },
   });
 
   function onSubmit(values: LoginFormValues) {
-    setSuccess(false);
     mutation.reset();
     mutation.mutate(values);
   }
 
+  const errorMessage =
+    mutation.error instanceof ApiError &&
+    mutation.error.message.toLowerCase().includes("temporary password has expired")
+      ? "Your temporary password has expired. Contact an administrator."
+      : getApiErrorMessage(mutation.error, "We could not sign you in. Please try again.");
+
   return (
     <div className="space-y-6">
       {/* Keep API feedback visible and labeled independently from field errors. */}
-      {mutation.error !== null && (
-        <StatusBanner variant="error">
-          {getApiErrorMessage(mutation.error, "We could not sign you in. Please try again.")}
-        </StatusBanner>
-      )}
-      {success && <StatusBanner variant="success">You’re signed in successfully.</StatusBanner>}
+      {mutation.error !== null && <StatusBanner variant="error">{errorMessage}</StatusBanner>}
 
       {/* The form uses native semantics while React Hook Form handles field validation. */}
       <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">

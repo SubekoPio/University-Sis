@@ -39,20 +39,176 @@ A phased, milestone-driven roadmap for building a university/school management s
 
 ### Core University Management Features
 
-| Module                               | Responsibilities                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------- |
-| **Academic Management**              | Course registration, class scheduling, timetabling, syllabus tracking     |
-| **Student Information System (SIS)** | Centralized student records, admissions data, enrollment history          |
-| **Examinations & Grading**           | Exam seating, digital assessment, invigilation, GPA/transcript generation |
-| **Finance & Billing**                | Tuition fees, automated invoices, ledgers, payment records                |
-| **LMS Integration**                  | Course materials, assignments, lesson plans linked to enrolled students   |
+| Module                               | Responsibilities                                                                                                                                                                                                        |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Academic Management**              | Faculties, departments, programmes, intakes, course units, curriculum, course unit selection, lecturer assignment, timetabling                                                                                          |
+| **Student Information System (SIS)** | Centralized student records, admissions data, enrollment history                                                                                                                                                        |
+| **Examinations & Grading**           | Exam seating, digital assessment, invigilation, GPA/transcript generation                                                                                                                                               |
+| **Finance & Billing**                | Tuition fees, automated invoices, ledgers, payment records                                                                                                                                                              |
+| **LMS Integration**                  | Course unit materials, assignments, and lesson plans shared by every student who selected the unit                                                                                                                      |
+| **Admissions**                       | Applications (from the university website or the admission office), document review, application fee confirmation, admission to a programme, default login details sent by email. **Students never sign themselves up** |
+| **Online Learning & Attendance**     | Class sessions with an embedded meeting link, an **Attend** button, online or physical study mode, and attendance measured by continuous time in the lecture                                                            |
 
 ### Student Portal Features
 
-- **Self-Registration:** enroll in semesters, modules, or retakes online without paper forms.
-- **Academic Results:** semester grades, academic standing, transcripts.
+- **Course Units:** after admission, the course units set for your programme are **loaded automatically**. Each intake you go to the Course Units page and select the ones you are prompted to take (core units, electives, retakes, and general units shared across faculties).
+- **Online learning:** open an online lecture with one click on **Attend** (the meeting link opens), or attend physically, depending on your study mode.
+- **Academic Results:** results and GPA per intake, academic standing, transcripts.
 - **Financial Statements:** balances, paid invoices, payment reference numbers.
-- **Timetables & Attendance:** personal class schedules and attendance records.
+- **Timetables & Attendance:** personal timetable for the selected course units and attendance records (for online lectures, based on continuous time spent in the lecture).
+- **Home page:** greeting, announcement slider, calendar, selected course units, and attendance percentage. Everything else is reached through the **navigation rail** ([Section 5.5](#55-application-shell-navigation-rails--home-pages)).
+
+---
+
+### 1.1 Academic Domain Model (Intakes, Programmes, Course Units)
+
+> **Terminology rule:** this system uses **intake** (never "term" or "semester"), **programme** (the degree or diploma), and **course unit** (a subject taught under programmes). Every doc, prompt, table, column, and UI label follows this.
+
+**Structure**
+
+```text
+Application  >  Admission  >  Student
+Faculty            e.g. Science & Technology, Health Sciences, Law, Business
+└── Department     e.g. Computer Science
+    └── Programme  e.g. BSc Computer Science
+        └── Curriculum (ProgrammeCourseUnit): the course units set for the programme,
+            │          by study year and intake slot, as CORE or ELECTIVE
+            └── Course Unit   e.g. CSC101 Introduction to Programming
+                └── Course Unit Offering: that unit delivered in ONE intake, with its lecturer(s)
+                    ├── Unit selection: a student's selection of the offering
+                    └── Class sessions: dated lectures (physical room and/or online meeting link)
+                        └── Attendance: per student per session
+```
+
+**Key concepts**
+
+| Concept                     | Meaning                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Intake**                  | One of **three study periods per academic year**: **Intake 1 (beginning of the year)**, **Intake 2 (mid-year)**, **Intake 3 (end of the year)**. Each has a name, start and end dates, and a selection window. Default labels are January, May, and September, but names and dates are **configuration, never hard-coded**. Selection, fees, attendance, results, and GPA all happen per intake |
+| **Programme**               | The award a student is admitted to (for example BSc Computer Science). Belongs to a department                                                                                                                                                                                                                                                                                                  |
+| **Course unit**             | A subject with a code, name, credit units, and level (for example CSC101). Owned by a department                                                                                                                                                                                                                                                                                                |
+| **Curriculum**              | The course units **set for each programme**, by **study year** and **intake slot (1, 2, or 3)**, marked **CORE** (compulsory) or **ELECTIVE**. A programme can also set minimum and maximum elective credits                                                                                                                                                                                    |
+| **General (shared) unit**   | A course unit flagged as general, open to students from **several faculties** (for example Communication Skills or Entrepreneurship for Health Sciences, Law, and Business students). It lists its eligible faculties, or is open to all                                                                                                                                                        |
+| **Course unit offering**    | A course unit delivered in one intake. There is **one offering per unit per intake**, with an assigned **primary lecturer** (and optional assistants). **Every eligible student, from any programme, selects the same offering**, so they share one class, timetable, lecturer, assignments, and exam                                                                                           |
+| **Application / Admission** | An applicant's request for a programme and intake, and the admin decision that turns an applicant into a student                                                                                                                                                                                                                                                                                |
+| **Study mode**              | **ONLINE** or **PHYSICAL**, chosen at admission and stored on the student's programme enrollment                                                                                                                                                                                                                                                                                                |
+| **Class session**           | One dated lecture of an offering: time, **physical room and/or online meeting link**                                                                                                                                                                                                                                                                                                            |
+| **Attendance rule**         | Configuration that decides whether a student counts as present in a session (see below)                                                                                                                                                                                                                                                                                                         |
+
+**Admissions: students never sign themselves up**
+
+1. An applicant applies through the **university website** (a separate site) or at the **admission office**. Website applications reach this system through a secured integration; office applications are entered by admin staff.
+2. Admin staff **review the application documents**, approving or rejecting each with a note.
+3. The applicant pays the **application fee**; staff confirm it with the bank reference.
+4. When the documents are approved **and** the fee is confirmed, an admin **admits** the applicant to the desired programme and intake and records the **study mode (online or physical)**.
+5. The system creates the student account and **emails the default login details**. The password is temporary, and the student must change it at first login.
+6. The programme's course units for the student's first study year and intake slot are **loaded automatically**.
+7. There is **no public sign-up**. Staff accounts are also created by admins.
+
+**How a student selects course units**
+
+1. After admission the course units are already loaded for the student's programme.
+2. Each intake, the student opens the **Course Units** page. The units for their current study year and intake slot are listed and they are **prompted** to select:
+   - **Core units**: pre-selected and compulsory.
+   - **Elective units**: choose within the programme's minimum and maximum.
+   - **Retake units**: previously failed or missed units, prompted automatically.
+   - **General units**: the shared pool open to the student's faculty, when the programme requires or allows them.
+3. The student confirms. The system checks: selection window open, programme or faculty eligibility, prerequisites, offering capacity, timetable clashes, credit-load limits, and duplicates.
+4. The student joins each offering's class list and sees the assigned lecturer and sessions.
+
+**Online and physical learning**
+
+| Topic                       | Rule                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Study mode**              | Set at admission. Changing it later needs an admin and a written reason (audited)                            |
+| **Class sessions**          | Each session is physical (room), online (meeting link), or both                                              |
+| **Online students**         | See an **Attend** button when a session is open. Clicking it records the join and **opens the meeting link** |
+| **Physical students**       | See the venue; the lecturer records attendance in class                                                      |
+| **Choosing to go physical** | A student can still attend a session physically; the lecturer then marks them present                        |
+| **Link privacy**            | The meeting link is shown only to students selected for that offering, and only around the session time      |
+
+**Online attendance: the continuous-time rule**
+
+- Attendance is measured by **how long the student stays in the lecture after joining the link**.
+- **On-and-off attendance does not count.** A student is **PRESENT** only if their longest **continuous** stay, merging short reconnects of up to a grace period (default 3 minutes), is at least a minimum share of the session length (default **75%**). Separate short visits are never added together.
+- Both numbers are configuration (`AttendanceRule`).
+- A student's attendance percentage for a course unit is sessions marked PRESENT divided by sessions held.
+- Lecturers can override a result with a written reason (audited).
+
+**Lecturers**
+
+- The registrar (or a head of department, if you add that role) **assigns lecturer(s) to each offering, per intake**.
+- A lecturer belongs to a department but can teach units in other departments, such as general units.
+- A lecturer sees one class list per offering, and for a shared unit that list mixes students from different programmes and faculties.
+
+### 1.2 Roles & Administrative Structure
+
+A university system needs a **team of specialised administrators**, not one all-powerful "admin". The design principles:
+
+- **One role per job function.** A user can hold several roles (permissions are the **union**). A head of department is a lecturer **plus** the HOD role, so they are not an extra person.
+- **Check permissions, never role names**, in code. Roles are just bundles of permissions.
+- **Separation of duties.** No single person can both create and approve a money or admissions decision.
+- **The system administrator runs the platform, not the business.** `admin` manages accounts, settings, and feature flags, and has **no access to grades, money, or admissions decisions**.
+- **Least privilege, deny by default.** Some roles are limited to their own records (student, lecturer), own department (HOD), or own faculty (dean).
+
+**Role catalogue (14 roles)**
+
+| #   | Role (key)                 | Job function                                                                                                                   | First needed                             |
+| --- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| 1   | `student`                  | Own programme, course units, timetable, attendance, results, statements                                                        | Phase 1 (built)                          |
+| 2   | `lecturer`                 | Own offerings, class lists, sessions and meeting links, attendance, marks                                                      | Phase 1 (built)                          |
+| 3   | `admin`                    | **System administrator**: staff accounts and roles, system settings, feature flags, audit log                                  | Phase 1 (built)                          |
+| 4   | `admissions_officer`       | Enters applications at the admission office, reviews documents                                                                 | Phase 2                                  |
+| 5   | `admissions_head`          | **Admits** applicants (with study mode), rejects, approves study mode changes                                                  | Phase 2                                  |
+| 6   | `registrar`                | Programmes, intakes, course units, curriculum, offerings, lecturer assignment, student records, progression, publishes results | Phase 1 (built), grows in Phases 2 and 5 |
+| 7   | `bursar` (Finance Officer) | Records bank deposits, issues receipts, confirms application fees                                                              | Phase 1 (built), used from Phase 2       |
+| 8   | `finance_manager`          | Fee structures, **voids payments**, reconciliation, finance reports                                                            | Phase 3                                  |
+| 9   | `hod` (Head of Department) | Own department: assigns lecturers, moderates marks, department reports                                                         | Phase 2 (optional) to Phase 5            |
+| 10  | `dean` (Faculty Dean)      | Own faculty: faculty reports, approves curriculum changes and results moderation                                               | Phase 5 to 6                             |
+| 11  | `exams_officer`            | Exam scheduling, eligibility overrides (with registrar), results checks                                                        | Phase 5                                  |
+| 12  | `communications_officer`   | Campus-wide announcements and calendar                                                                                         | Phase 2 (optional)                       |
+| 13  | `support_desk`             | Resend login details, unlock accounts, view account status; **no academic or finance data**                                    | Phase 2 to 7                             |
+| 14  | `auditor`                  | **Read-only** on finance, admissions, and the audit log                                                                        | Phase 7                                  |
+
+**Start with 8, grow to 14.** Roles 1 to 8 cover everything built through Phase 3 (the first five already exist from Phase 1). Add the other six as their phases arrive.
+
+**How many people? (planning estimates)**
+
+These are rules of thumb, not measured data. Small is about 2,000 students or fewer with 1 to 2 faculties; medium is 2,000 to 10,000 with 4 to 6 faculties; large is over 10,000. Adjust to your numbers.
+
+| Role                                             | Small                             | Medium             | Large               |
+| ------------------------------------------------ | --------------------------------- | ------------------ | ------------------- |
+| `admin` (system administrators)                  | 2                                 | 2 to 3             | 3 to 5              |
+| `admissions_officer`                             | 1 to 2                            | 3 to 5             | 8 to 15             |
+| `admissions_head`                                | 1                                 | 1 to 2             | 2 to 3              |
+| `registrar` team                                 | 1 to 2                            | 3 to 5             | 6 to 10             |
+| `bursar` (finance officers)                      | 2 to 3                            | 4 to 8             | 10 to 20            |
+| `finance_manager`                                | 1                                 | 1 to 2             | 2 to 4              |
+| `dean` (one per faculty)                         | 1 to 2                            | 4 to 6             | 8 to 12             |
+| `hod` (one per department)                       | 3 to 6                            | 12 to 25           | 30 to 40            |
+| `exams_officer`                                  | 1                                 | 2 to 4             | 5 to 10             |
+| `communications_officer`                         | 0 to 1                            | 1 to 2             | 2 to 4              |
+| `support_desk`                                   | 1                                 | 2 to 3             | 5 to 10             |
+| `auditor`                                        | 0 to 1 (can be external)          | 1 to 2             | 2 to 4              |
+| **Total staff accounts with an admin-type role** | **about 14 to 23**                | **about 35 to 65** | **about 80 to 140** |
+| `lecturer` / `student`                           | all academic staff / all students |                    |                     |
+
+Only **2 to 3 of these are system administrators** (always at least two, so there is a backup). Most of the total is deans and heads of department, who are usually lecturers with an extra role.
+
+**Separation of duties (rules the system enforces)**
+
+| Rule                                                                                                                               | Why                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| The person who **records** a payment cannot **void** it; voids need `finance_manager` and a different person                       | Stops a cashier hiding a mistake or theft |
+| The person who **reviews** application documents cannot be the one who **admits**                                                  | Prevents fake admissions                  |
+| `admin` has **no** grades, money, or admissions permissions                                                                        | IT staff cannot change business data      |
+| Granting or removing the `admin` role needs a **second admin**                                                                     | Prevents a silent takeover                |
+| Lecturers enter marks, the HOD or exams officer moderates, the registrar publishes (Phase 5)                                       | Protects the integrity of results         |
+| `auditor` is read-only                                                                                                             | Independence                              |
+| Online payment flags are switched on only by `admin`, with a written approval reason                                               | Controlled go-live                        |
+| Privileged roles (`admin`, `finance_manager`, `bursar`, `registrar`, `admissions_head`) require **multi-factor sign-in** (Phase 7) | Protects the highest-risk accounts        |
+
+**Good practice:** one individual account per person (no shared logins), an **access review every intake** (who holds which role, confirmed by their manager), and immediate deactivation when staff leave. The matrix itself lives in `docs/RBAC_MATRIX.md` and `docs/ROLES.md` (Phase 0 update 0.10).
 
 ---
 
@@ -159,6 +315,8 @@ docs/
 - Backend layering: Controller → Service → Repository (Prisma). Controllers hold no business logic.
 - All DTOs validated with class-validator. All endpoints guarded by RBAC decorators.
 - Money is stored as integer minor units (never floats).
+- Terminology: use "intake" (never "term" or "semester"), "programme", and
+  "course unit". Three intakes per academic year. See docs/ACADEMIC_MODEL.md.
 - Never regenerate or overwrite existing files unless explicitly asked.
 - Every service ships with a matching *.spec.ts in a separate step.
 - Read docs/RBAC_MATRIX.md and docs/DATABASE_SCHEMA.md before generating code.
@@ -368,6 +526,85 @@ export default config;
 
 > Tailwind v4 projects declare the same tokens with an `@theme` block in CSS instead of `tailwind.config.ts`. Use whichever matches your installed version.
 
+### 5.5 Application Shell, Navigation Rails & Home Pages
+
+Every screen lives inside one shared **app shell**, so no phase invents its own layout. The shell is built once, in Phase 2 (steps 2.18 to 2.20), and later phases only **add navigation items and calendar events** to it.
+
+**App shell**
+
+| Part                   | Behavior                                                                                                                                                                                                                                     |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Navigation rail**    | Left side, background `brand` (`#312E81`), white icons and labels. The active item uses a translucent white overlay and `aria-current="page"`. It collapses to an icon-only rail with tooltips. Items are grouped under small section labels |
+| **Mobile**             | The rail becomes a slide-over drawer opened from a menu button in the top bar (students are mostly on phones)                                                                                                                                |
+| **Top bar**            | Current intake label on the left; **profile icon** (photo, or initials on an `accent` circle) on the right, opening a menu: Profile, Settings, Sign out, and a role switcher for users with more than one role                               |
+| **Content area**       | Background `surface`; content on `card` panels with `line` borders                                                                                                                                                                           |
+| **Role routing**       | After login, users land on their own home: `/student`, `/lecturer`, `/finance`, `/registrar`, `/admissions`, `/admin`. Visiting another role's route shows a `403` page                                                                      |
+| **Config-driven menu** | One `nav.config.ts` lists each role's items (label, icon, route, required permission, `enabled`). An item for a module that is not built yet has `enabled: false` and is not shown; each phase switches on its own items                     |
+| **Accessibility**      | Skip-to-content link, `nav` landmark, full keyboard support, visible `accent` focus ring                                                                                                                                                     |
+
+**Navigation rail items by role** (an item appears when its phase ships)
+
+| Role                             | Phase 2 items                                                                                                                                          | Added later                                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| **Student**                      | Home, My Programme, **Course Units** (select and view), Timetable, Attendance, Announcements                                                           | Finance (Phase 3), Assignments & Materials (Phase 4), Exams & Results, Transcript (Phase 5)                     |
+| **Lecturer**                     | Home, My Course Units, Class Sessions (meeting links), Attendance, Announcements                                                                       | Assignments and Grading (Phase 4), Exams & Marks (Phase 5)                                                      |
+| **Registrar**                    | Home, Faculties & Departments, Programmes, Intakes, Course Units, Curriculum, Offerings & Lecturers, Class Sessions, Students, Announcements, Calendar | Results & Transcripts (Phase 5), Reports (Phase 6)                                                              |
+| **Admin** (system administrator) | Home, Users (staff accounts and roles)                                                                                                                 | Feature Flags (Phase 3), Audit Log (Phase 7)                                                                    |
+| **Admissions officer**           | Home, Applications                                                                                                                                     |                                                                                                                 |
+| **Admissions head**              | Home, Applications (with Admit), Study Mode Changes                                                                                                    |                                                                                                                 |
+| **Finance (bursar)**             | Application Fees (Home arrives in Phase 3)                                                                                                             | Fee Structures, Invoices, Record Payment, Payments, Receipts, Daily Deposit Report (Phase 3), Reports (Phase 6) |
+
+**Student home page** (`/student`)
+
+The home page shows **only** the items below. Fees, results, GPA, assignments, and everything else are reached through the navigation rail.
+
+```text
+┌──────┬────────────────────────────────────────────────────────────────┐
+│      │ Top bar:  Intake 1, 2026                           (profile)   │
+│  N   ├────────────────────────────────────────────────────────────────┤
+│  A   │ HERO (brand background)                                        │
+│  V   │  (profile icon)  Good morning, Grace    ┌────────────────────┐ │
+│      │  BSc Computer Science, Intake 1         │ Announcement slide │ │
+│  R   │                                         │   <   * o o o   >  │ │
+│  A   │                                         └────────────────────┘ │
+│  I   ├───────────────────────────────────┬────────────────────────────┤
+│  L   │ CALENDAR                          │ MY COURSE UNITS            │
+│      │ month view + day agenda           │ CSC101  Intro to Prog...   │
+│      │                                   │ ATTENDANCE   86%  (teal)   │
+└──────┴───────────────────────────────────┴────────────────────────────┘
+```
+
+| Section                   | Content                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hero**                  | Background `brand`. **Profile icon** (links to profile), **time-of-day greeting** with the student's first name, and the programme and current intake underneath. Beside it, the **announcements slider** (below)                                                                                                                                                                                       |
+| **Announcements slider**  | Up to 5 slides, pinned first, then newest. Each slide has a category badge, title, short excerpt, an optional image, and **Read more** (opens the full announcement). Arrows, dots, swipe on mobile, auto-advance every 6 seconds, paused on hover and keyboard focus, and **no auto-advance when the user prefers reduced motion**. Empty state: "No announcements right now"                          |
+| **Calendar**              | Month view with event markers and a **day agenda** listing that day's classes (from the student's selected course units, with **Attend** for open online sessions), intake and registration dates, and academic calendar events. Event types are told apart by **icon and label**, not color alone. Assignment deadlines (Phase 4) and exam dates (Phase 5) appear automatically when those phases ship |
+| **My course units**       | The units the student selected for the current intake: code, name, lecturer, next class. For an **online student**, the next class shows an **Attend** button when the session is open (it opens the meeting link); a physical student sees the venue. If no units are selected and the selection window is open, a **Select course units** button is shown                                             |
+| **Attendance percentage** | One overall percentage (sessions present divided by sessions held, using the continuous-time rule for online lectures) in a **teal badge**. If it falls below the configured minimum (default 75%, configurable), the badge switches to the **warning** style with an icon and the text "Below minimum". Small per-unit percentages underneath. Before any session: "No sessions yet"                   |
+
+**Layout:** on desktop the hero spans the full width, with the calendar on the left and, on the right, My course units above Attendance. On mobile the order is hero, attendance, course units, calendar. The page loads from a **single aggregated request** (`GET /me/home`) with skeleton loading and a retry state.
+
+**Other role home pages** (same hero and calendar pattern; confirm the widgets)
+
+| Role                              | Role-specific widgets beside the hero and calendar                                                                                                                               |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Lecturer**                      | My course units this intake (with student counts) and today's classes                                                                                                            |
+| **Registrar**                     | Current intake status and course unit selection progress; "needs attention" items in warning style (offerings without a lecturer, admitted students who have not selected units) |
+| **Admissions (officer and head)** | Applications awaiting review, awaiting fee confirmation, and ready to admit                                                                                                      |
+| **Admin**                         | Accounts needing attention (expired temporary passwords, deactivated users)                                                                                                      |
+| **Finance**                       | Today's recorded deposits, applications awaiting fee confirmation, and a link to the daily bank-deposit report (built in Phase 3)                                                |
+
+**Announcements and calendar (backend, Phase 2)**
+
+| Feature             | Design                                                                                                                                                                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Announcements**   | Title, body, optional image, category (General, Academic, Finance, Exam, Event), pinned flag, publish and expiry dates, draft/published/archived status                            |
+| **Audience**        | All students, all lecturers, a role, a faculty, a programme, an intake, or a **course unit offering**. A student sees an announcement if any audience rule matches them            |
+| **Who can post**    | Registrar and admin: any audience. Lecturer: only their own course unit offerings. Finance: Finance-category notices                                                               |
+| **Safety**          | The body is sanitized on the server so scripts cannot be injected; images go through `StorageService`                                                                              |
+| **Calendar events** | Academic calendar entries (holidays, academic events, registration dates, general events) with audience rules. **Intake dates and timetable sessions are derived**, not duplicated |
+| **Extensible**      | Each later module registers a `CalendarEventProvider` (assignment deadlines in Phase 4, exam dates in Phase 5), so the calendar grows without changing the home page               |
+
 ---
 
 ## 6. Documentation & Code Commenting Standards
@@ -416,7 +653,7 @@ One or two sentences on what this step delivers and why it exists.
 
 ## Business Rules Implemented
 
-- e.g. "Overpayments carry forward to the next term"
+- e.g. "Overpayments carry forward to the next intake"
 
 ## How to Run & Test
 
@@ -551,6 +788,15 @@ export class OnlinePaymentController {
 
 ## 7. Roadmap Overview
 
+### Progress Tracker
+
+| Phase                                    | Status                                                                                            |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 0 Foundation & Copilot Setup             | **Complete** (original build). **Updates 0.10 to 0.15 to run first** (they define the role model) |
+| 1 Authentication & RBAC                  | **Complete** (original build). **Updates 1.10 to 1.16 to run before Phase 2**                     |
+| 2 Academic structure, course units & SIS | **NEXT: not started**                                                                             |
+| 3 to 7                                   | Not started                                                                                       |
+
 ```mermaid
 gantt
     title Development Roadmap (indicative)
@@ -559,7 +805,7 @@ gantt
     Phase 0 Foundation & Copilot Setup :p0, 2026-01-01, 10d
     section Core
     Phase 1 Auth & RBAC                :p1, after p0, 21d
-    Phase 2 Academic & SIS             :p2, after p1, 28d
+    Phase 2 Academic Structure & SIS     :p2, after p1, 35d
     section Business Modules
     Phase 3 Finance                    :p3, after p2, 28d
     Phase 4 LMS & Assignments          :p4, after p3, 28d
@@ -569,16 +815,16 @@ gantt
     Phase 7 Hardening & Launch         :p7, after p6, 21d
 ```
 
-| Phase | Theme                      | Depends On | Key Deliverable                                                                                                                            |
-| ----- | -------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0     | Foundation & Copilot setup | none       | Repo, CI, conventions, instruction files                                                                                                   |
-| 1     | Auth & RBAC                | 0          | Secure login, roles, permissions                                                                                                           |
-| 2     | Academic & SIS             | 1          | Students, courses, enrollment, timetable                                                                                                   |
-| 3     | Finance                    | 2          | Fees, invoices, **bank-deposit payments recorded by Finance**, receipts, statements; online card/bank/mobile payments show **Coming soon** |
-| 4     | LMS & Assignments          | 2          | Assignments, uploads, submissions, grading                                                                                                 |
-| 5     | Examinations               | 3, 4       | Exams with fee and assignment eligibility rules                                                                                            |
-| 6     | Reporting & Analytics      | 3, 4, 5    | Dashboards and PDF exports                                                                                                                 |
-| 7     | Hardening & Launch         | all        | Security, performance, deployment                                                                                                          |
+| Phase | Theme                                  | Depends On | Key Deliverable                                                                                                                            |
+| ----- | -------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0     | Foundation & Copilot setup             | none       | Repo, CI, conventions, instruction files                                                                                                   |
+| 1     | Auth & RBAC                            | 0          | Secure login, roles, permissions                                                                                                           |
+| 2     | Academic structure, course units & SIS | 1          | Faculties, programmes, intakes, course units, curriculum, lecturer assignment, student registration, timetable                             |
+| 3     | Finance                                | 2          | Fees, invoices, **bank-deposit payments recorded by Finance**, receipts, statements; online card/bank/mobile payments show **Coming soon** |
+| 4     | LMS & Assignments                      | 2          | Assignments, uploads, submissions, grading                                                                                                 |
+| 5     | Examinations                           | 3, 4       | Exams with fee and assignment eligibility rules                                                                                            |
+| 6     | Reporting & Analytics                  | 3, 4, 5    | Dashboards and PDF exports                                                                                                                 |
+| 7     | Hardening & Launch                     | all        | Security, performance, deployment                                                                                                          |
 
 > **Every micro-phase in every phase ends with a documentation step** (Section 6): step document, development-log entry, and commented code.
 
@@ -587,6 +833,8 @@ gantt
 ---
 
 ## Phase 0: Foundation & Copilot Setup
+
+**Status: COMPLETE** (original build, prompts 0.1 to 0.8). **Follow-up updates 0.10 to 0.15 are listed after the exit criteria. Run them first: Phase 0 updates, then Phase 1 updates (1.10 to 1.16), then Phase 2.**
 
 **Goal:** a clean repo where Copilot has everything it needs to produce consistent code.
 
@@ -604,9 +852,26 @@ gantt
 
 **Exit criteria:** `docker compose up` works; CI is green on an empty app; Copilot responds in line with the instruction files; brand tokens and documentation scaffold are in place.
 
+### Phase 0 Updates (added after the initial build)
+
+Phase 0 was built and run with the original steps above, which are **unchanged**. These follow-ups define the **role model** ([Section 1.2](#12-roles--administrative-structure)) and bring the foundation docs, configuration, and design tokens in line with later decisions. They are **appended, not rewritten**, and are numbered from 0.10 so they do not clash with the table above.
+
+| Step | Update                                | Focus                                                                                                                                                                            |
+| ---- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0.10 | **Role Model & RBAC Matrix Update**   | Redraft `docs/RBAC_MATRIX.md`, create `docs/ROLES.md`: the 14 roles, permission naming, separation-of-duties rules, expected account counts                                      |
+| 0.11 | **Copilot Instructions Update**       | Terminology (intake, programme, course unit), no public sign-up, permission checks, payments, attendance rule, no meeting URLs in lists                                          |
+| 0.12 | **Design Tokens Update**              | Status colors (success, warning, error, info) and `field`, `StatusBanner`, `ComingSoonBadge`, extended hex lint                                                                  |
+| 0.13 | **Environment & Config Update**       | New variables (email, temporary password lifetime, website integration secret, meeting hosts, attendance defaults, application fee, feature flag seeds) with validated config    |
+| 0.14 | **Governance & Docs Scaffold Update** | `CODEOWNERS` for auth, RBAC, finance, admissions and migrations; PR checklist; runbooks; access review template; CI check that permissions used in code exist in the RBAC matrix |
+| 0.15 | **Update Phase 0 Docs**               | New step documents, log entries, ADR for the role model                                                                                                                          |
+
+**Exit criteria:** `docs/RBAC_MATRIX.md` lists all 14 roles and the separation-of-duties rules; the instruction files, design tokens, and configuration match the later decisions; CODEOWNERS and the PR template are active; CI is green. Every step is documented and all code is commented.
+
 ---
 
 ## Phase 1: Authentication & RBAC
+
+**Status: COMPLETE** (original build, prompts 1.1 to 1.9). **Follow-up updates 1.10 to 1.16 are listed after the exit criteria and must be run before Phase 2.**
 
 **Goal:** secure identity and fine-grained authorization before any business data exists.
 
@@ -624,24 +889,108 @@ gantt
 
 **Exit criteria:** all roles (student, lecturer, bursar, registrar, admin) can log in; protected routes reject unauthorized roles; auth test suite passes in CI. Every step is documented and all code is commented.
 
+### Phase 1 Updates (added after the initial build)
+
+Phase 1 was built and run with the original steps above, which are **unchanged**. The admissions model means **students never sign themselves up**: admins create every account and the system emails default login details. These follow-up updates adjust the finished auth module. They are **appended, not rewritten**, and are numbered to match the prompt library. Run them in order, **before Phase 2**.
+
+| Step | Update                             | Focus                                                                                                                                                                       |
+| ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.10 | **Auth Schema Changes**            | `User` gains `mustChangePassword`, `temporaryPasswordExpiresAt`, `createdById`, and deactivation fields; `DEACTIVATED` status                                               |
+| 1.11 | **Admin User Services**            | Create users with a random temporary password emailed once; resend credentials; change roles; deactivate and reactivate; new `admin:user:manage` permission                 |
+| 1.12 | **Login Gating & Change Password** | **Disable the public `register` endpoint**; a temporary-password session may only change its password; expiry; changing the password clears the flag and verifies the email |
+| 1.13 | **Admin User Controllers**         | `/admin/users` endpoints guarded by `admin:user:manage`                                                                                                                     |
+| 1.14 | **Update Auth Tests**              | Register returns 404, forced change, expiry, deactivation, permissions                                                                                                      |
+| 1.15 | **Frontend Auth Updates**          | Remove any sign-up page, add the change-password page, handle `MUST_CHANGE_PASSWORD`                                                                                        |
+| 1.16 | **Update Phase 1 Docs**            | New step documents, log entries, ADR                                                                                                                                        |
+
+**Notes**
+
+- The admin screens for creating users arrive in Phase 2 (step 2.24, Admissions & Users UI), built on the API from step 1.13.
+- The email verification flow from the original build stays, but admin-created accounts are marked verified at their first successful password change.
+- The role-based redirect after login is added in Phase 2 (step 2.18), with the app shell.
+- **Exit criteria:** `POST /auth/register` returns 404; an admin can create a user and the user receives a temporary password; the first login forces a password change; deactivated users are locked out immediately; the updated auth tests pass in CI. Every step is documented and all code is commented.
+
 ---
 
 ## Phase 2: Core Academic & Student Information System
 
-**Goal:** the data backbone that Finance, LMS, and Exams all depend on.
+**Status: NEXT (Phase 1 is complete; Phase 2 has not been started).**
 
-| Step | Micro-Phase                         | Focus                                                                                         |
-| ---- | ----------------------------------- | --------------------------------------------------------------------------------------------- |
-| 2.1  | **Academic Schema**                 | academic_years, terms/semesters, programs, courses, classes, enrollments, students, lecturers |
-| 2.2  | **Migration & Seed**                | Sample programs, courses, and terms                                                           |
-| 2.3  | **SIS APIs**                        | Student records, admissions data, enrollment history                                          |
-| 2.4  | **Course Registration Logic**       | Self-registration, retakes, prerequisites, capacity checks                                    |
-| 2.5  | **Timetable & Attendance Services** | Scheduling, clash detection, attendance recording                                             |
-| 2.6  | **Tests**                           | Registration rules, clash detection, enrollment history                                       |
-| 2.7  | **Student Portal UI**               | Profile, registration, timetable, attendance pages                                            |
-| 2.8  | **Admin/Registrar UI**              | Student management, course and class management                                               |
+**Goal:** model the university's academic structure, build the **admissions workflow** (admins admit applicants and send default logins), let students **select their pre-loaded course units** each intake, run **online and physical classes with attendance tracking**, and build the **app shell, navigation rails, and home pages** that every later phase plugs into. Build on the existing Phase 1 models and its updates (1.10 to 1.16, which add admin-created accounts); Phase 2 changes only one Phase 1 file, the login flow, which gains a role-based redirect in step 2.18. Read [Section 1.1](#11-academic-domain-model-intakes-programmes-course-units) and [Section 5.5](#55-application-shell-navigation-rails--home-pages) first.
 
-**Exit criteria:** a student can self-register for a semester; a registrar can manage records; the timetable shows no clashes. Every step is documented and all code is commented.
+| Step | Micro-Phase                                            | Focus                                                                                                                                                                                |
+| ---- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2.0  | **Domain Docs & Instructions**                         | Intake / programme / course unit terminology, admissions flow, online attendance rule in `copilot-instructions.md`, `docs/ACADEMIC_MODEL.md`, `docs/DATABASE_SCHEMA.md`              |
+| 2.1  | **Academic Structure Schema**                          | Faculty, Department, Programme, AcademicYear, Intake (three per year, with selection windows)                                                                                        |
+| 2.2  | **Course Unit & Curriculum Schema**                    | CourseUnit (with `isGeneral`), CourseUnitFacultyEligibility, ProgrammeCourseUnit, ProgrammeElectiveRule, CourseUnitPrerequisite, CourseUnitOffering                                  |
+| 2.3  | **Student, Lecturer & Enrollment Schema**              | Student, Lecturer, OfferingLecturer, ProgrammeEnrollment (with **study mode**), IntakeRegistration, UnitRegistration                                                                 |
+| 2.4  | **Admissions Schema**                                  | Application, ApplicationDocument, ApplicationFeeRecord, AdmissionRecord                                                                                                              |
+| 2.5  | **Sessions & Attendance Schema**                       | TimetableSlot, ClassSession (physical room and/or meeting link), SessionJoin, PresenceInterval, AttendanceRecord, AttendanceRule                                                     |
+| 2.6  | **Announcements & Calendar Schema**                    | Announcement, AnnouncementAudience, CalendarEvent, CalendarEventAudience                                                                                                             |
+| 2.7  | **Migration, RBAC & Seed**                             | Migrate, Phase 2 permissions in `RBAC_MATRIX.md` and the seed, sample data                                                                                                           |
+| 2.8  | **Academic Structure Services**                        | Faculties, departments, programmes, academic years; **exactly three intakes per year**, windows, status transitions                                                                  |
+| 2.9  | **Course Unit & Curriculum Services**                  | Course units, general-unit eligibility, curriculum, elective rules, prerequisites, offerings, **lecturer assignment**                                                                |
+| 2.10 | **Admissions Services**                                | Applications, document review, application fee confirmation, **admit** (creates the student account, loads units, emails login details), secured website intake endpoint             |
+| 2.11 | **SIS Services**                                       | Students, enrollment history, study mode changes (audited), progression, lecturer profiles                                                                                           |
+| 2.12 | **Course Unit Selection Logic**                        | **Prompted units** (core, electives, retakes, general units) and selection with full validation                                                                                      |
+| 2.13 | **Class Sessions & Online Meeting Services**           | Generate sessions from the timetable, meeting links, clash detection, the **Attend** action (study-mode aware), `MeetingProvider` interface                                          |
+| 2.14 | **Attendance Engine**                                  | Presence ingestion (report import now, provider adapter later), the **continuous-time rule**, physical attendance, lecturer overrides, percentages                                   |
+| 2.15 | **Announcements, Calendar & Home Services**            | Audience-filtered announcements, aggregated calendar with `CalendarEventProvider`, `GET /me/home` for each role                                                                      |
+| 2.16 | **Controllers & RBAC**                                 | Controllers and DTOs for every Phase 2 service, per `RBAC_MATRIX.md`                                                                                                                 |
+| 2.17 | **Tests**                                              | Admission gating, selection rules, shared units, clashes, **continuous-time attendance**, audiences, home data                                                                       |
+| 2.18 | **App Shell & Navigation Rails**                       | Layout, `brand` navigation rail, top bar with profile icon, role menus from `nav.config.ts`, role-based redirect after login                                                         |
+| 2.19 | **Student Home Page**                                  | Hero (profile icon, greeting, announcements slider), calendar, selected course units with **Attend**, attendance percentage                                                          |
+| 2.20 | **Lecturer, Registrar, Admissions & Admin Home Pages** | Same pattern with role-specific widgets                                                                                                                                              |
+| 2.21 | **Student Portal UI**                                  | My Programme, **Course Units** (select and view), Timetable, Attendance, Announcements                                                                                               |
+| 2.22 | **Lecturer UI**                                        | My course units, class sessions and meeting links, class lists (mixed programmes), attendance review and overrides                                                                   |
+| 2.23 | **Registrar UI**                                       | Faculties, programmes, intakes, course units, curriculum, offerings and lecturers, students, announcements and calendar                                                              |
+| 2.24 | **Admissions & Users UI**                              | Applications list and detail, document review, application fee confirmation (bursar's Application Fees list), **Admit** with study mode, resend login details, staff user management |
+| 2.25 | **Phase Documentation**                                | Step documents, development log, ADRs                                                                                                                                                |
+
+**Who can do what (summary)** (roles are defined in [Section 1.2](#12-roles--administrative-structure))
+
+| Role                             | Phase 2 access                                                                                                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Admin** (system administrator) | Staff accounts and roles, resend credentials, system settings. **No** admissions, academic, or finance decisions                                                |
+| **Admissions officer**           | Enter applications, review and approve or reject documents                                                                                                      |
+| **Admissions head**              | **Admit** applicants with a study mode (a different person from the document reviewer), reject, approve study mode changes                                      |
+| **Bursar** (Finance Officer)     | Confirm application fees with the bank reference                                                                                                                |
+| **Registrar**                    | Faculties, departments, programmes, intakes, course units, curriculum, offerings, lecturer assignment, class sessions, student records, announcements, calendar |
+| **Lecturer**                     | Own offerings, class lists, own class sessions and meeting links, attendance review for own offerings, announcements to own offerings                           |
+| **Student**                      | Own programme, select own course units in the window, own timetable, **Attend** for own sessions, own attendance, announcements, calendar                       |
+
+**Online attendance: what the system can and cannot know (decision needed)**
+
+The rule (continuous time in the lecture; on-and-off does not count) is built into the system. But when a lecture runs on an **external meeting tool**, the system only knows when a student was connected if that tool shares **join and leave times**. A pasted meeting link alone cannot tell us that. It also measures **presence in the meeting**, not whether the student is paying attention.
+
+| Option                                                               | How join and leave times arrive                                                                | Notes                                                                               |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **A. Zoom**                                                          | Webhooks or reports, with a unique join link per student                                       | Verify that your Zoom plan includes participant reports or webhooks                 |
+| **B. Microsoft Teams**                                               | Attendance reports through Microsoft Graph                                                     | Fits if the university uses Microsoft 365                                           |
+| **C. Google Meet**                                                   | Meet attendance data (Workspace editions)                                                      | Fits if the university uses Google Workspace; availability depends on the edition   |
+| **D. Self-hosted meeting tool** (for example Jitsi or BigBlueButton) | The system receives join and leave events directly and can also track activity inside the page | Most accurate and the only way to measure real engagement; needs hosting and upkeep |
+
+Whichever tool is chosen, each student needs a **unique join link or a sign-in identity**, otherwise their time cannot be matched to them.
+
+**What Phase 2 builds:** the `MeetingProvider` interface, the **Attend** button and click log, class sessions with links, the attendance engine and rules, lecturer overrides, and a **report import** (the lecturer uploads the tool's attendance report) so attendance works end to end from day one. **Automatic ingestion** from the chosen tool is added as a small follow-up step once you pick the tool.
+
+**Assumptions to confirm before building**
+
+1. The curriculum places each unit by **study year and intake slot (1, 2, or 3)**, and students progress through their programme's slots in order. If students do not attend all three intakes each year, the progression rule changes.
+2. **Electives** use a configurable minimum and maximum per programme, study year, and intake slot.
+3. Course unit selection is **auto-approved** if the rules pass (no advisor approval).
+4. The **registrar** assigns lecturers; the `hod` role (own department) can take this over later.
+5. Intake **names and dates are configuration** (default January, May, September).
+6. **Attendance rule defaults:** 75% continuous time of the session, 3-minute reconnect grace, 75% minimum attendance for the home-page warning. All configurable.
+7. **Study mode:** online students attend through the meeting link, physical students in the room, and a student can choose to go physical for a session (the lecturer marks them present). Physical students are not shown meeting links.
+8. **Application fee:** in Phase 2 it is confirmed by staff with the bank reference (`ApplicationFeeRecord`). In Phase 3 it moves onto the Finance payment and receipt flow.
+9. **Default login details** are a system-generated temporary password with forced change at first login. A one-time activation link is safer than a password in an email, so choose which you prefer.
+10. **Phase 1 must be updated first (prompts 1.10 to 1.16):** the public `register` endpoint built in Phase 1 conflicts with "students never sign themselves up", so it is disabled and replaced by admin-created users with temporary credentials.
+11. Admissions work is split between `admissions_officer` (enter and review) and `admissions_head` (admit), and the application fee is confirmed by `bursar`, so the admin role has no admissions authority. The reviewer and the admitting user must be different people.
+12. The lecturer, registrar, admin, and finance home pages follow the student pattern; confirm their widgets.
+13. The **university website** is a separate site. This system exposes a secured endpoint it can call; the website itself is out of scope.
+
+**Exit criteria:** an admin can take an applicant through document review and fee confirmation, admit them with a study mode, and the student receives default login details, is forced to change the password at first login, and finds their programme's course units already loaded; public sign-up no longer exists; the student selects units on the Course Units page and joins each offering's class list; a Law or Health Sciences student can select an eligible general unit and shares the same class and lecturer as Computer Science students; an online student's **Attend** button opens the meeting link, and attendance follows the continuous-time rule (on-and-off visits do not count); physical attendance is recorded by the lecturer; users land on the correct home page and see only their own navigation rail; the student home page shows the hero with the announcements slider, the calendar, selected course units, and the attendance percentage. Every step is documented and all code is commented.
 
 ---
 
@@ -665,10 +1014,10 @@ gantt
 
 ### The Physical Payment Workflow (Active)
 
-1. **Reference number:** the student generates a unique **payment reference** in the portal (tied to student, term, and invoice) and writes it on the bank deposit slip.
+1. **Reference number:** the student generates a unique **payment reference** in the portal (tied to student, intake, and invoice) and writes it on the bank deposit slip.
 2. **Bank deposit:** the student pays into the school's bank account. The portal shows the bank name, account details, and instructions (loaded from configuration).
 3. **Finance verification:** the student brings the deposit slip to Finance (or Finance matches the reference on the bank statement).
-4. **Finance records the payment:** student, invoice or term, amount, bank name, **deposit-slip/bank reference**, deposit date, and an optional scan of the slip. The system **rejects a duplicate bank reference**.
+4. **Finance records the payment:** student, invoice or intake, amount, bank name, **deposit-slip/bank reference**, deposit date, and an optional scan of the slip. The system **rejects a duplicate bank reference**.
 5. **Receipt issued:** the system updates the balance, carry-forward, and fee-paid percentage, then generates a **sequentially numbered PDF receipt** (school logo watermark) that Finance prints and hands to the student. The student can also download it from the portal.
 6. **Corrections:** payments are **never deleted**. A mistake is fixed by **voiding with a written reason**, which creates a reversing log entry and marks the receipt `VOID`; a corrected payment then gets a new receipt. Voiding needs a different approver from the person who recorded the payment (maker-checker).
 7. **Reconciliation:** Finance can run a **daily bank-deposit report** to reconcile recorded payments against the bank statement.
@@ -677,16 +1026,16 @@ gantt
 
 Any number of Finance staff can work in the system at the same time, **provided each one is authenticated and authorised**.
 
-| Requirement                  | How it is met                                                                                                                                                                                                                               |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Authenticated**            | Every finance user signs in with their **own individual account** (JWT session from Phase 1). **No shared logins.** Unauthenticated requests get `401`                                                                                      |
-| **Authorised**               | Access is checked **per user** by RBAC permission, not by who is logged in at the desk: `finance:payment:record`, `finance:payment:void`, `finance:receipt:read`, `finance:report:read`. A signed-in user without the permission gets `403` |
-| **Several users, same role** | The `bursar` (finance) role can be assigned to as many users as needed; the registrar or admin adds and removes them                                                                                                                        |
-| **Accountability**           | Every payment, void, and receipt stores the acting user (`recordedById`, `voidedById`) and appears in the append-only transaction log                                                                                                       |
-| **Maker-checker for voids**  | A void must be approved by a **different authorised finance user** from the one who recorded the payment. This works because several finance users exist                                                                                    |
-| **Concurrency**              | Two finance users recording at the same moment must still get **unique, gap-free receipt numbers** and correct balances (database transactions and locking)                                                                                 |
-| **Offboarding**              | Deactivating a finance user revokes their sessions immediately; their past records stay attributed to them                                                                                                                                  |
-| **Students**                 | Students never receive finance permissions and cannot record or void payments                                                                                                                                                               |
+| Requirement                  | How it is met                                                                                                                                                                                                                                                          |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Authenticated**            | Every finance user signs in with their **own individual account** (JWT session from Phase 1). **No shared logins.** Unauthenticated requests get `401`                                                                                                                 |
+| **Authorised**               | Access is checked **per user** by RBAC permission, not by who is logged in at the desk: `finance:payment:record` (bursar), `finance:payment:void` (finance_manager), `finance:receipt:read`, `finance:report:read`. A signed-in user without the permission gets `403` |
+| **Several users, same role** | The `bursar` (Finance Officer) role can be given to as many users as needed; the `finance_manager` role adds fee-structure and void authority. Only the system administrator adds or removes role holders                                                              |
+| **Accountability**           | Every payment, void, and receipt stores the acting user (`recordedById`, `voidedById`) and appears in the append-only transaction log                                                                                                                                  |
+| **Maker-checker for voids**  | A void needs the `finance_manager` role **and** a different person from the one who recorded the payment; a user holding both roles cannot void their own entry                                                                                                        |
+| **Concurrency**              | Two finance users recording at the same moment must still get **unique, gap-free receipt numbers** and correct balances (database transactions and locking)                                                                                                            |
+| **Offboarding**              | Deactivating a finance user revokes their sessions immediately; their past records stay attributed to them                                                                                                                                                             |
+| **Students**                 | Students never receive finance permissions and cannot record or void payments                                                                                                                                                                                          |
 
 ### Online Payments: "Coming Soon" Behavior
 
@@ -704,20 +1053,22 @@ Any number of Finance staff can work in the system at the same time, **provided 
 
 ### Phase 3 Steps
 
-| Step | Micro-Phase                              | Focus                                                                                                                                                                                                          | Notes                                                                                                                                 |
-| ---- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.0  | **Feature Flag Infrastructure**          | `FeatureFlag` and `FeatureFlagAudit` models, `FeatureFlagService`, `@RequireFeature` guard, `GET /features`, admin toggle, frontend `FeatureGate`; flags `payments.online.card`, `.bank`, `.mobile` seeded OFF | Reusable for future modules                                                                                                           |
-| 3.1  | **Finance Schema + Migration**           | fee_structures, invoices, payments (bank name, bank reference, deposit date, recorded-by, void fields), receipts, outstanding and carry-forward balances, transaction_logs                                     | Integer minor units; `PaymentMethod` enum: `BANK_DEPOSIT` plus `CARD`, `ONLINE_BANK`, `MOBILE_MONEY` for later; unique bank reference |
-| 3.2  | **Fee Structure APIs**                   | Create/update fee structure, assign fees per class and term, validate academic year relationships                                                                                                              | **Active**; no frontend                                                                                                               |
-| 3.3  | **Invoice Generation**                   | Generate and bulk-generate invoices, apply carried-forward amounts, idempotent                                                                                                                                 | **Active**                                                                                                                            |
-| 3.4  | **Payment Logic (Bank Deposits)**        | Payment reference generator, record bank-deposit payments, duplicate-slip protection, balances, carry forward excess, outstanding balances, fee-paid percentages, void with reason                             | **Active**; service layer only                                                                                                        |
-| 3.5  | **Finance Tests** (early)                | Carry-forward, outstanding balances, percentages, duplicate slip, void and re-record, concurrent payments, invalid amounts                                                                                     | Write before receipts                                                                                                                 |
-| 3.6  | **Payment Controller**                   | Bank-deposit endpoints (record, list, void, statement); online endpoints guarded by the flags                                                                                                                  | Any authenticated, authorised finance user records; students read own statement only                                                  |
-| 3.7  | **Receipt Generation**                   | Printable PDF receipts, school logo watermark, gap-free numbering, transaction references, `VOID` marking                                                                                                      | **Active**; Puppeteer or PDFKit                                                                                                       |
-| 3.8  | **Finance Dashboard UI**                 | Fee structures, invoices, **record bank deposit form**, payment list, receipt print/history, daily bank-deposit report, fee analytics                                                                          | Next.js, shadcn/ui, brand and status tokens                                                                                           |
-| 3.9  | **Student Financial Statement UI**       | Invoices and balance, receipts, **reference number generator, "How to pay now" bank instructions**, **Pay online section with "Coming soon" badges**                                                           | Student portal; mobile first                                                                                                          |
-| 3.10 | **Online Payment Activation** (DEFERRED) | Per-method activation runbook, provider integration checklist, sandbox smoke tests, rollback plan                                                                                                              | Document now; **execute only when a method is approved**                                                                              |
-| 3.11 | **Phase Documentation**                  | Step documents, development log, ADRs (flag design, maker-checker voids)                                                                                                                                       | Required for every phase                                                                                                              |
+| Step | Micro-Phase                                                             | Focus                                                                                                                                                                                                                                                     | Notes                                                                                                                                 |
+| ---- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.0  | **Feature Flag Infrastructure**                                         | `FeatureFlag` and `FeatureFlagAudit` models, `FeatureFlagService`, `@RequireFeature` guard, `GET /features`, admin toggle, frontend `FeatureGate`; flags `payments.online.card`, `.bank`, `.mobile` seeded OFF                                            | Reusable for future modules                                                                                                           |
+| 3.1  | **Finance Schema + Migration**                                          | fee_structures, invoices, payments (bank name, bank reference, deposit date, recorded-by, void fields), receipts, outstanding and carry-forward balances, transaction_logs                                                                                | Integer minor units; `PaymentMethod` enum: `BANK_DEPOSIT` plus `CARD`, `ONLINE_BANK`, `MOBILE_MONEY` for later; unique bank reference |
+| 3.2  | **Fee Structure APIs**                                                  | Create/update fee structure, assign fees per programme and intake (and per study mode, online or physical, if fees differ), validate academic year relationships                                                                                          | **Active**; no frontend                                                                                                               |
+| 3.3  | **Invoice Generation**                                                  | Generate and bulk-generate invoices, apply carried-forward amounts, idempotent                                                                                                                                                                            | **Active**                                                                                                                            |
+| 3.4  | **Payment Logic (Bank Deposits)**                                       | Payment reference generator, record bank-deposit payments, duplicate-slip protection, balances, carry forward excess, outstanding balances, fee-paid percentages, void with reason                                                                        | **Active**; service layer only                                                                                                        |
+| 3.5  | **Finance Tests** (early)                                               | Carry-forward, outstanding balances, percentages, duplicate slip, void and re-record, concurrent payments, invalid amounts                                                                                                                                | Write before receipts                                                                                                                 |
+| 3.6  | **Payment Controller**                                                  | Bank-deposit endpoints (record, list, void, statement); online endpoints guarded by the flags                                                                                                                                                             | Any authenticated, authorised finance user records; students read own statement only                                                  |
+| 3.7  | **Receipt Generation**                                                  | Printable PDF receipts, school logo watermark, gap-free numbering, transaction references, `VOID` marking                                                                                                                                                 | **Active**; Puppeteer or PDFKit                                                                                                       |
+| 3.8  | **Finance Dashboard UI & Finance Home**                                 | Finance home page (shared home layout: hero, calendar, today's deposits), add Finance items to the navigation rail, fee structures, invoices, **record bank deposit form**, payment list, receipt print/history, daily bank-deposit report, fee analytics | Next.js, shadcn/ui, brand and status tokens                                                                                           |
+| 3.9  | **Student Financial Statement UI** (adds the student Finance rail item) | Invoices and balance, receipts, **reference number generator, "How to pay now" bank instructions**, **Pay online section with "Coming soon" badges**                                                                                                      | Student portal; mobile first                                                                                                          |
+| 3.10 | **Online Payment Activation** (DEFERRED)                                | Per-method activation runbook, provider integration checklist, sandbox smoke tests, rollback plan                                                                                                                                                         | Document now; **execute only when a method is approved**                                                                              |
+| 3.11 | **Phase Documentation**                                                 | Step documents, development log, ADRs (flag design, maker-checker voids)                                                                                                                                                                                  | Required for every phase                                                                                                              |
+
+**Application fees:** the application fee confirmed by staff in Phase 2 (`ApplicationFeeRecord`) moves onto this payment and receipt flow, so applicants get the same numbered receipts and duplicate-slip protection.
 
 **Cross-module rule:** the exam fee-percentage restriction (Phase 5) is **fully active**, because it reads the payments Finance records from bank deposits.
 
@@ -735,16 +1086,16 @@ Any number of Finance staff can work in the system at the same time, **provided 
 
 **Goal:** assignments, materials, submissions, and grading workflows.
 
-| Step | Micro-Phase            | Focus                                                                                                |
-| ---- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| 4.1  | **LMS Schema**         | assignments, learning_materials, submissions, grading, extension_requests (exams modeled in Phase 5) |
-| 4.2  | **Migration**          | Apply and verify                                                                                     |
-| 4.3  | **Assignment APIs**    | Create/update, deadline tracking, visibility per class, approval workflow                            |
-| 4.4  | **File Upload System** | PDF, DOCX, PPTX, image uploads; upload validation; storage via `StorageService` (MinIO → R2/S3)      |
-| 4.5  | **Submission Logic**   | Upload submissions, deadline enforcement, missed-paper tracking, extensions, status tracking         |
-| 4.6  | **Grading System**     | Grade submissions, publish marks, feedback, grading analytics, submission statistics                 |
-| 4.7  | **LMS Tests**          | Deadline enforcement, extensions, upload validation, grading rules                                   |
-| 4.8  | **LMS Frontend**       | Assignments, submissions, reading materials, grading dashboard, teacher upload pages                 |
+| Step | Micro-Phase            | Focus                                                                                                                                                                                                                                             |
+| ---- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4.1  | **LMS Schema**         | assignments, learning_materials, submissions, grading, extension_requests (exams modeled in Phase 5)                                                                                                                                              |
+| 4.2  | **Migration**          | Apply and verify                                                                                                                                                                                                                                  |
+| 4.3  | **Assignment APIs**    | Create/update, deadline tracking, visibility per course unit offering (every student who selected the unit sees it, whatever their programme), approval workflow; registers a `CalendarEventProvider` so assignment deadlines appear in calendars |
+| 4.4  | **File Upload System** | PDF, DOCX, PPTX, image uploads; upload validation; storage via `StorageService` (MinIO → R2/S3)                                                                                                                                                   |
+| 4.5  | **Submission Logic**   | Upload submissions, deadline enforcement, missed-paper tracking, extensions, status tracking                                                                                                                                                      |
+| 4.6  | **Grading System**     | Grade submissions, publish marks, feedback, grading analytics, submission statistics                                                                                                                                                              |
+| 4.7  | **LMS Tests**          | Deadline enforcement, extensions, upload validation, grading rules                                                                                                                                                                                |
+| 4.8  | **LMS Frontend**       | Adds Assignments, Materials, and Grading items to the navigation rails; assignments, submissions, reading materials, grading dashboard, teacher upload pages                                                                                      |
 
 **Safeguards:** validate MIME type and size server-side; virus-scan uploads if feasible; pre-signed URLs for downloads; never trust client-supplied file names.
 
@@ -756,16 +1107,16 @@ Any number of Finance staff can work in the system at the same time, **provided 
 
 **Goal:** exams gated by business rules from Finance and LMS.
 
-| Step | Micro-Phase                   | Focus                                                                                                                                      |
-| ---- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 5.1  | **Exam Schema**               | exams, exam_submissions, grading, exam_results, exam_restrictions                                                                          |
-| 5.2  | **Migration**                 | Apply and verify                                                                                                                           |
-| 5.3  | **Exam Creation APIs**        | Create and publish exams, class visibility, scheduling, deadline management                                                                |
-| 5.4  | **Restriction Logic**         | Assignment completion checks, fee percentage checks (based on payments recorded by Finance), missed-assignment restrictions, exam blocking |
-| 5.5  | **Result Publishing**         | Publish results, missed-paper status, result visibility, grading reports                                                                   |
-| 5.6  | **Transcript & GPA Services** | GPA calculation, academic standing, transcript generation                                                                                  |
-| 5.7  | **Exam Tests**                | Eligibility matrix (fee % × assignment completion), result visibility                                                                      |
-| 5.8  | **Examination Frontend**      | Exams dashboard, exam attempts, grading pages, result pages                                                                                |
+| Step | Micro-Phase                   | Focus                                                                                                                                                             |
+| ---- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5.1  | **Exam Schema**               | exams, exam_submissions, grading, exam_results, exam_restrictions                                                                                                 |
+| 5.2  | **Migration**                 | Apply and verify                                                                                                                                                  |
+| 5.3  | **Exam Creation APIs**        | Create and publish exams, course unit offering visibility, scheduling, deadline management; registers a `CalendarEventProvider` so exam dates appear in calendars |
+| 5.4  | **Restriction Logic**         | Assignment completion checks, fee percentage checks (based on payments recorded by Finance), missed-assignment restrictions, exam blocking                        |
+| 5.5  | **Result Publishing**         | Publish results, missed-paper status, result visibility, grading reports                                                                                          |
+| 5.6  | **Transcript & GPA Services** | GPA calculation, academic standing, transcript generation                                                                                                         |
+| 5.7  | **Exam Tests**                | Eligibility matrix (fee % × assignment completion), result visibility                                                                                             |
+| 5.8  | **Examination Frontend**      | Adds Exams, Results, and Transcript items to the navigation rails; exams dashboard, exam attempts, grading pages, result pages                                    |
 
 **Exit criteria:** a student under the fee threshold or with missed assignments is correctly blocked; results appear only after publishing; transcripts match expected GPAs. Every step is documented and all code is commented.
 
@@ -792,7 +1143,7 @@ Any number of Finance staff can work in the system at the same time, **provided 
 
 | Area              | Tasks                                                                                                                                                                                                         |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Security**      | Dependency audit, secret scanning, CodeQL, OWASP Top 10 review, penetration test, audit logging                                                                                                               |
+| **Security**      | Dependency audit, secret scanning, CodeQL, OWASP Top 10 review, penetration test, audit logging, **multi-factor sign-in for privileged roles**, `auditor` and `support_desk` roles, first **access review**   |
 | **Performance**   | Load test registration and results-day scenarios; database indexing review; Redis tuning                                                                                                                      |
 | **Reliability**   | Automated backups, restore drill, health checks, error monitoring                                                                                                                                             |
 | **Compliance**    | Data protection and privacy policy, retention rules, role-based data access audit                                                                                                                             |
@@ -842,6 +1193,7 @@ Any number of Finance staff can work in the system at the same time, **provided 
 - [ ] **All code commented**: file header, TSDoc on exports, block comments explaining why
 - [ ] UI uses only the brand and status tokens (no raw hex values in components); statuses use icon + text, not color alone
 - [ ] Online payment methods stay behind their `payments.online.*` flags (default OFF) and show "Coming soon"; the bank-deposit flow is tested end to end
+- [ ] New screens live inside the shared app shell and register their navigation items in `nav.config.ts` (no custom layouts)
 - [ ] Schema, RBAC, and design docs updated where affected
 - [ ] Committed on a branch and PR merged with a green CI
 

@@ -11,6 +11,7 @@ interface AuthFieldProps {
   type?: "email" | "password" | "text";
   autoComplete?: string;
   placeholder?: string;
+  hint?: string;
   error?: string;
 }
 
@@ -27,9 +28,19 @@ export function AuthField({
   type = "text",
   autoComplete,
   placeholder,
+  hint,
   error,
 }: AuthFieldProps) {
+  const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
+  const describedBy =
+    hint !== undefined && error !== undefined
+      ? `${hintId} ${errorId}`
+      : hint !== undefined
+        ? hintId
+        : error !== undefined
+          ? errorId
+          : undefined;
 
   return (
     <div className="space-y-2">
@@ -43,10 +54,16 @@ export function AuthField({
         autoComplete={autoComplete}
         placeholder={placeholder}
         aria-invalid={error !== undefined}
-        aria-describedby={error === undefined ? undefined : errorId}
+        aria-describedby={describedBy}
         className="h-11 border-field bg-card text-ink placeholder:text-ink/50 focus-visible:border-accent focus-visible:ring-accent"
         {...registration}
       />
+      {/* Keep policy guidance programmatically associated with its input. */}
+      {hint !== undefined && (
+        <p id={hintId} className="text-sm text-ink/70">
+          {hint}
+        </p>
+      )}
       {/* Field errors stay adjacent to their input and use the semantic error token. */}
       {error !== undefined && (
         <p id={errorId} className="text-sm text-error">

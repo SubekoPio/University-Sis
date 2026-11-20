@@ -14,6 +14,7 @@ const permissionGrants = {
   "auth:credentials:update_own": ["student", "lecturer", "bursar", "registrar", "admin"],
   "auth:session:manage_own": ["student", "lecturer", "bursar", "registrar", "admin"],
   "auth:user:manage": ["admin"],
+  "admin:user:manage": ["admin"],
   "auth:role_permission:manage": ["admin"],
   "sis:admission:submit_own": ["student"],
   "sis:admission:read_own": ["student"],

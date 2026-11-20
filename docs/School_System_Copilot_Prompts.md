@@ -2,7 +2,7 @@
 
 Ready-to-paste prompts for every micro-phase of the roadmap. Each prompt is kept under ~250 words, states its scope, and tells Copilot what **not** to do.
 
-> **Standing rules for every prompt:** (1) **always comment code** (file header, TSDoc on every function/class, block comments explaining why); (2) **document every step** using the step-documentation prompt that closes each phase; (3) **all UI uses the brand tokens** (`brand #312E81`, `accent #4F46E5`, `badge #0D9488`, `surface #F9FAFB`, `card #FFFFFF`, `ink #111827`, `line #E5E7EB`) and the status tokens (`success #15803D`, `warning #B45309`, `error #B91C1C`, `info #4F46E5`, `field #6B7280`, each with a soft tint) via `docs/DESIGN_SYSTEM.md`, never raw hex values; (4) **payments**: the live process is physical (the student pays at the bank, Finance records the deposit and issues the receipt); online card, bank and mobile payments show **"Coming soon"** behind per-method feature flags (default OFF).
+> **Standing rules for every prompt:** (1) **always comment code** (file header, TSDoc on every function/class, block comments explaining why); (2) **document every step** using the step-documentation prompt that closes each phase; (3) **all UI uses the brand tokens** (`brand #312E81`, `accent #4F46E5`, `badge #0D9488`, `surface #F9FAFB`, `card #FFFFFF`, `ink #111827`, `line #E5E7EB`) and the status tokens (`success #15803D`, `warning #B45309`, `error #B91C1C`, `info #4F46E5`, `field #6B7280`, each with a soft tint) via `docs/DESIGN_SYSTEM.md`, never raw hex values; (4) **terminology**: use **intake** (never "term" or "semester"), **programme**, and **course unit**; (5) **payments**: the live process is physical (the student pays at the bank, Finance records the deposit and issues the receipt); online card, bank and mobile payments show **"Coming soon"** behind per-method feature flags (default OFF).
 
 ---
 
@@ -115,6 +115,7 @@ Include conventions:
 - DTO validation with class-validator
 - Every endpoint protected by RBAC decorators
 - Money stored as integer minor units, never floats
+- Terminology: use "intake" (never "term"/"semester"), "programme", "course unit"; three intakes per academic year
 - Never overwrite existing files unless told
 - Tests are written in a separate step
 - Always read docs/RBAC_MATRIX.md and docs/DATABASE_SCHEMA.md first
@@ -235,6 +236,157 @@ Files:
 
 Also configure eslint-plugin-jsdoc to require doc blocks on exported functions,
 classes, and methods. Add explanatory comments to every config file.
+```
+
+### Phase 0 Updates (added after the initial build)
+
+> Phase 0 was built and run with prompts 0.1 to 0.8 above, which are **unchanged**. These follow-ups define the **role model** and bring the foundation docs, configuration and design tokens in line with later decisions. They are numbered from 0.10 so they do not clash with the roadmap table. Run them **in order: Phase 0 updates, then Phase 1 updates (1.10 to 1.16), then Phase 2**.
+
+### 0.10 Role Model & RBAC Matrix Update
+
+**Mode:** Ask (review before saving)
+**Context:** `#file:docs/RBAC_MATRIX.md #file:docs/ARCHITECTURE.md`
+
+```text
+Redraft docs/RBAC_MATRIX.md and create docs/ROLES.md. Do not write code.
+
+Roles (key: job):
+- admin: system administrator (accounts, roles, settings, feature flags, audit
+  log); NO access to grades, money or admissions decisions
+- admissions_officer: enter applications, review documents
+- admissions_head: admit, reject, approve study mode changes
+- registrar: programmes, intakes, course units, curriculum, offerings, student
+  records, publish results
+- bursar (Finance Officer): record bank deposits, issue receipts, confirm
+  application fees
+- finance_manager: fee structures, void payments, reconciliation, finance reports
+- lecturer, student
+- Later: hod (OWN-DEPT), dean (OWN-FACULTY), exams_officer,
+  communications_officer, support_desk, auditor (read-only)
+
+Matrix: rows = permissions named module:resource:action, columns = roles, cells =
+Y / N / OWN / OWN-DEPT / OWN-FACULTY. Users may hold several roles; permissions
+are the union; deny by default; code checks permissions, never role names.
+
+Add a "Separation of duties" section: the recorder of a payment cannot void it;
+the document reviewer cannot be the admitting user; granting admin needs a second
+admin; lecturers enter marks, HOD or exams officer moderates, registrar publishes.
+In docs/ROLES.md give each role's purpose, first phase needed, and expected
+account counts for a small, medium and large institution.
+```
+
+### 0.11 Copilot Instructions Update
+
+**Mode:** Ask (review before saving)
+**Context:** `#file:.github/copilot-instructions.md #file:.github/instructions`
+
+```text
+Update our Copilot instruction files. Show the diff before saving, do not remove
+existing rules, and keep each file under 60 lines.
+
+Add these rules:
+- Terminology: "intake" (never "term" or "semester"), "programme", "course unit";
+  three intakes per academic year
+- No public sign-up: accounts are created by admins; students are admitted
+- Authorization: check permissions with @Permissions, never role names; deny by
+  default; follow docs/RBAC_MATRIX.md and its separation-of-duties rules
+- Payments: ACTIVE = physical bank deposits recorded by Finance, with receipts;
+  COMING SOON = online card/bank/mobile behind payments.online.* flags (default
+  OFF, never enabled in code or seed data)
+- Online attendance: PRESENT only for a continuous stay of at least the
+  configured share of the session; on-and-off time is never added up
+- Never return meeting URLs in list or detail responses
+- Comments and docs: file header, TSDoc on exports, why-comments, and a step
+  document after each micro-phase
+- UI: only the semantic color tokens, including status colors; status is never
+  shown by color alone
+```
+
+### 0.12 Design Tokens Update
+
+**Mode:** Edit
+**Context:** `#file:docs/DESIGN_SYSTEM.md #file:apps/web/tailwind.config.ts`
+
+```text
+Extend the existing design tokens. Do not change the existing ones.
+
+Add (strong for text and icons, soft for backgrounds):
+- field   #6B7280 (input borders)
+- success #15803D / #DCFCE7
+- warning #B45309 / #FEF3C7
+- error   #B91C1C / #FEE2E2
+- info    #4F46E5 / #EEF2FF
+
+Do:
+1. Add them to tailwind.config.ts and globals.css (map error to shadcn's
+   destructive variable), with a comment on each token's role.
+2. Update docs/DESIGN_SYSTEM.md: status rules (icon plus text label, never color
+   alone), a contrast table, "teal is reserved for GPA and attendance", and the
+   "Coming soon" badge rule (info-soft background, info text).
+3. Add <StatusBanner variant="success|warning|error|info"> and <ComingSoonBadge>.
+4. Extend the raw-hex lint rule to cover the new tokens.
+```
+
+### 0.13 Environment & Config Update
+
+**Mode:** Edit
+
+```text
+Add the new configuration, validated at startup. Do not change existing variables.
+
+Add to .env.example (a comment on every line) and to the typed config module
+(zod; fail fast when a required value is missing):
+- APP_URL (login URL used in emails), EMAIL_FROM, RESEND_API_KEY
+- TEMP_PASSWORD_TTL_DAYS=7
+- WEBSITE_INTEGRATION_SECRET (signs requests from the university website to the
+  admissions endpoint)
+- MEETING_ALLOWED_HOSTS (hosts allowed in meeting links)
+- ATTENDANCE_MIN_CONTINUOUS_PERCENT=75, ATTENDANCE_RECONNECT_GRACE_SECONDS=180,
+  ATTENDANCE_WARNING_PERCENT=75
+- APPLICATION_FEE_AMOUNT_MINOR and CURRENCY
+- SCHOOL_NAME, SCHOOL_LOGO_KEY
+- FEATURE_ONLINE_CARD_ENABLED, FEATURE_ONLINE_BANK_ENABLED,
+  FEATURE_ONLINE_MOBILE_ENABLED, all false (seed values only)
+
+Never commit real secrets. Add a short README section describing each variable.
+```
+
+### 0.14 Governance & Docs Scaffold Update
+
+**Mode:** Edit
+
+```text
+Add governance and documentation scaffolding. Comment every file.
+
+1. .github/CODEOWNERS: require a named reviewer for auth, RBAC, finance,
+   admissions and prisma/migrations (use placeholder team handles).
+2. Update .github/pull_request_template.md with: roles or permissions changed?
+   docs/RBAC_MATRIX.md updated? separation of duties preserved? code commented?
+   step document added? design tokens only?
+3. Create docs/runbooks/README.md and docs/ACCESS_REVIEW.md (a template to run
+   every intake: each staff account, its roles, who confirmed it, what was
+   removed).
+4. Add a small CI script that fails when a permission used in a @Permissions
+   decorator is missing from docs/RBAC_MATRIX.md.
+```
+
+### 0.15 Update the Phase 0 Documentation
+
+**Mode:** Ask
+
+```text
+Document the Phase 0 updates (0.10 to 0.14) using #file:docs/phases/step-template.md.
+
+Do NOT edit the existing step documents for 0.1 to 0.8. Create
+docs/phases/phase-0/step-0.10-<name>.md through step-0.14-<name>.md.
+
+Then:
+1. Append one entry per step to docs/DEVELOPMENT_LOG.md (newest first).
+2. Draft an ADR in docs/adr/: the role model, permission-based checks, and the
+   separation-of-duties rules.
+3. List out-of-date sections in docs/ARCHITECTURE.md and docs/DESIGN_SYSTEM.md.
+
+Base everything on the actual code in #codebase. Do not modify source code.
 ```
 
 ---
@@ -410,152 +562,770 @@ Base everything on the actual code in #codebase. Do not invent features. Do not
 modify source code in this step.
 ```
 
----
+### Phase 1 Updates (added after the initial build)
 
-# Phase 2: Core Academic & Student Information System
+> Phase 1 was built and run with prompts 1.1 to 1.9 above, which are **unchanged**. The admissions model means **students never sign themselves up**: admins create every account and the system emails default login details. These follow-up prompts adjust the finished auth module. Run them **in order, before Phase 2**.
 
-### 2.1 Academic Schema
+### 1.10 Auth Schema Changes
 
-**Mode:** Ask
-**Context:** `#file:prisma/schema.prisma #file:docs/DATABASE_SCHEMA.md`
+**Mode:** Edit
+**Context:** `#file:prisma/schema.prisma`
 
 ```text
-Add Prisma models for academic structure and SIS.
+Students never sign themselves up; admins create accounts. Extend the existing
+User model only.
 
-Models: AcademicYear, Term, Program, Course, CourseOffering (class),
-Student, Lecturer, Enrollment, CourseRegistration, Timetable slot,
-AttendanceRecord, AdmissionRecord.
+Add to User:
+- mustChangePassword Boolean default false
+- temporaryPasswordExpiresAt DateTime?
+- createdById String? (the admin who created the account, relation to User)
+- deactivatedAt DateTime? and deactivatedById String?
+Make sure UserStatus has a DEACTIVATED value (add it if missing).
 
-Requirements:
-- Link Student and Lecturer to User (one-to-one)
-- Enrollment history preserved (no destructive updates)
-- Unique constraints (e.g. one registration per student per offering)
-- Indexes, enums (e.g. EnrollmentStatus), timestamps
-
-Do NOT generate APIs. Do not modify auth models.
+Existing users keep mustChangePassword = false. Add indexes where needed and
+/// comments. Give me the migration command.
+Do not change other models. Do not generate services or APIs in this step.
 ```
 
-### 2.2 Seed Data
+### 1.11 Admin User Services
+
+**Mode:** Edit
+**Context:** `#file:prisma/schema.prisma #file:docs/RBAC_MATRIX.md`
+
+```text
+Create AdminUsersService in apps/api/src/users (services only, no controllers).
+
+Methods:
+- createUser(dto, adminId): email, name, roleIds. Generate a cryptographically
+  random temporary password (12+ characters, no predictable pattern), hash it
+  with argon2, set mustChangePassword = true, temporaryPasswordExpiresAt
+  (configurable, default 7 days) and createdById. Email the login URL and
+  credentials through EmailService (Resend template).
+- resendCredentials(userId, adminId): new temporary password, revoke all sessions
+- updateRoles(userId, roleIds, adminId): add or remove roles with an audit entry
+- deactivateUser / reactivateUser (reason required): revoke all sessions on
+  deactivation
+- listUsers(filters): search, role, status, pagination
+
+Rules: never log or store the plain password; send it only in the email; a
+failed email must not roll back user creation (record it and allow resend); an
+admin cannot deactivate themselves or remove their own admin role.
+Add the permission admin:user:manage (admin only) to docs/RBAC_MATRIX.md and the
+seed, idempotently.
+```
+
+### 1.12 Login Gating & Change Password
+
+**Mode:** Edit
+**Context:** `#file:apps/api/src/auth`
+
+```text
+Update the existing auth module. Modify ONLY the auth service, auth controller and
+their DTOs, and list every file you change.
+
+1. Disable the public POST /auth/register: return 404 and remove its route. Keep
+   the underlying logic internal for AdminUsersService.
+2. Login: when mustChangePassword is true, the session may call ONLY
+   POST /auth/change-password and logout; every other endpoint returns 403 with
+   code MUST_CHANGE_PASSWORD. Reject an expired temporary password with a message
+   to contact an administrator.
+3. POST /auth/change-password: requires the current (temporary) password,
+   validates the password policy, rejects reuse of the temporary password, clears
+   mustChangePassword, marks the email as verified, and revokes all other sessions.
+Rate limit the endpoint. Comment every change.
+```
+
+### 1.13 Admin User Controllers
 
 **Mode:** Edit
 
 ```text
-Extend prisma/seed.ts with sample academic data: 1 academic year, 2 terms,
-3 programs, 12 courses, 20 students, 5 lecturers, offerings for the current term.
-Keep it idempotent and clearly marked as development-only
-(skip when NODE_ENV=production). Do not alter existing seed sections.
+Create AdminUsersController and DTOs for the existing AdminUsersService.
+
+Endpoints: POST /admin/users, GET /admin/users,
+POST /admin/users/:id/resend-credentials, PATCH /admin/users/:id/roles,
+POST /admin/users/:id/deactivate, POST /admin/users/:id/reactivate.
+
+Guard all of them with the JWT guard and @Permissions('admin:user:manage').
+Use class-validator DTOs, Swagger docs, and a rate limit on resend.
+Controllers only call the service. Do not modify the service.
 ```
 
-### 2.3 SIS Services
+### 1.14 Update Auth Tests
 
 **Mode:** Edit
 
 ```text
-Create apps/api/src/sis with StudentsService and EnrollmentsService.
+Add tests for the Phase 1 updates. Do not edit existing auth tests unless one
+fails because register is now disabled, and list any such change.
 
-Features:
-- CRUD for students (soft delete)
-- Search and pagination
-- Admission record handling
-- Enrollment history queries
+Unit: createUser (random password, mustChangePassword set, email sent, email
+failure does not roll back), resendCredentials revokes sessions, deactivation
+revokes sessions, an admin cannot deactivate themselves, expired temporary
+password rejected.
+E2E: POST /auth/register returns 404; a first login with a temporary password
+allows only change-password and logout (403 MUST_CHANGE_PASSWORD elsewhere); after
+change-password normal access works and old sessions are revoked; a non-admin
+gets 403 on /admin/users; an admin can create, list, change roles and deactivate.
 
-Services and repositories only. No controllers or guards yet.
-Use Prisma, with transactions where multiple writes occur.
-```
-
-### 2.4 SIS Controllers & RBAC
-
-**Mode:** Edit
-**Context:** `#file:docs/RBAC_MATRIX.md`
-
-```text
-Create controllers and DTOs for the existing SIS services.
-
-Apply @Roles/@Permissions exactly per RBAC_MATRIX.md.
-Students may only read their OWN record.
-Use class-validator DTOs, pagination query DTO, and Swagger decorators.
-Do not modify the services.
-```
-
-### 2.5 Course Registration Logic
-
-**Mode:** Edit
-
-```text
-Create CourseRegistrationService in apps/api/src/academic.
-
-Rules:
-- Registration only within the term's registration window
-- Prerequisite check
-- Offering capacity check
-- Retake handling (flag as retake, allowed once per term)
-- Timetable clash detection against already registered offerings
-- Return clear, typed error reasons
-
-Wrap writes in a transaction. Service only: no controller, no UI.
-```
-
-### 2.6 Timetable & Attendance
-
-**Mode:** Edit
-
-```text
-Create TimetableService and AttendanceService.
-
-Timetable: create slots, detect room and lecturer clashes, get a student's
-weekly schedule.
-Attendance: lecturer records attendance for a session, student attendance
-history, attendance percentage per course.
-
-Services only. Do not generate controllers or UI.
-```
-
-### 2.7 Academic Controllers
-
-**Mode:** Edit
-
-```text
-Add controllers and DTOs for CourseRegistrationService, TimetableService,
-and AttendanceService. Apply RBAC per docs/RBAC_MATRIX.md.
-Students: register, view own timetable and attendance.
-Lecturers: record attendance for their own offerings.
-Do not modify services.
-```
-
-### 2.8 Academic Tests
-
-**Mode:** Edit
-
-```text
-Write unit tests for CourseRegistrationService, TimetableService, and
-AttendanceService. Cover: closed registration window, missing prerequisite,
-full class, clash detection, retake rules, attendance percentage math.
 Do not change production code; list bugs instead.
 ```
 
-### 2.9 Student Portal UI
+### 1.15 Frontend Auth Updates
 
 **Mode:** Edit
 
 ```text
-Create student portal pages in apps/web (navigation rail in brand color; GPA and attendance shown as teal badge components): /student/profile,
-/student/registration, /student/timetable, /student/attendance.
+Update the existing apps/web auth pages. Modify only the files you list.
 
-Use shadcn/ui, TanStack Query, mobile-first layout.
-Registration page: list offerings, show clash/prereq errors inline,
-confirm dialog. Backend already exists; do not change it.
+1. Remove any public "Register" or "Sign up" page, link and route.
+2. Add /change-password: current (temporary) password, new password with the
+   policy hints, and confirmation. Show it automatically when the API returns
+   MUST_CHANGE_PASSWORD or login reports mustChangePassword. After success,
+   continue into the app.
+3. Show a clear message when the temporary password has expired, telling the user
+   to contact an administrator.
+
+Use shadcn/ui, React Hook Form with zod, TanStack Query and the existing API
+client. Do not modify backend code.
 
 Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
 Comment every component and major JSX section.
 ```
 
-### 2.10 Registrar UI
+### 1.16 Update the Phase 1 Documentation
+
+**Mode:** Ask
+
+```text
+Document the Phase 1 updates (1.10 to 1.15) using #file:docs/phases/step-template.md.
+
+Do NOT edit the existing step documents for 1.1 to 1.9. Create
+docs/phases/phase-1/step-1.10-<name>.md through step-1.15-<name>.md.
+
+Then:
+1. Append one entry per step to docs/DEVELOPMENT_LOG.md (newest first).
+2. Draft an ADR in docs/adr/: admin-created accounts with temporary credentials,
+   forced change at first login, and no public sign-up.
+3. List out-of-date sections in docs/DATABASE_SCHEMA.md and docs/RBAC_MATRIX.md.
+
+Base everything on the actual code in #codebase. Do not modify source code.
+```
+
+---
+
+# Phase 2: Core Academic & Student Information System
+
+> **Status:** Phase 1 (auth and RBAC) is complete. Run the Phase 1 updates (1.10 to 1.16) first; admissions depends on them. Phase 2 builds on the existing models and changes only one Phase 1 file: the login flow, which gains a role-based redirect in step 2.18.
+>
+> **Domain model (use these words everywhere):** Application → Admission → Student. Faculty → Department → Programme (e.g. BSc Computer Science) → curriculum of **Course Units** → **Course Unit Offering** (one per unit per **intake**, with lecturer(s)) → class sessions → attendance.
+> **Intakes:** three per academic year (default January, May, September; configuration). Never use "term" or "semester".
+> **Students never sign themselves up.** Applicants apply through the university website (a separate site) or the admission office; admins review documents, confirm the application fee, admit them with a **study mode (ONLINE or PHYSICAL)**, and the system emails default login details. The programme's course units load automatically; the student selects them on the **Course Units** page.
+> **Online attendance:** a student is PRESENT only if their longest **continuous** time in the lecture (reconnects up to a short grace merged) reaches the minimum share of the session; on-and-off time is never added up.
+
+### 2.0 Domain Docs & Instructions
+
+**Mode:** Ask (review before saving)
+**Context:** `#file:.github/copilot-instructions.md #file:docs/DATABASE_SCHEMA.md #file:docs/RBAC_MATRIX.md`
+
+```text
+Update our docs for the academic domain model. Do not write code.
+
+1. Draft docs/ACADEMIC_MODEL.md explaining:
+   - Hierarchy: Faculty > Department > Programme > Curriculum > CourseUnit >
+     Offering > ClassSession > Attendance
+   - Three intakes per academic year (configurable names and dates)
+   - Core, elective, retake and general (shared) course units
+   - One offering per unit per intake; students from any eligible programme share it
+   - Admissions: apply (website or office) > document review > application fee
+     confirmed > admit (with study mode) > default login emailed > units auto-loaded
+   - Study mode ONLINE or PHYSICAL and what each student sees
+   - The continuous-time online attendance rule and its configurable numbers
+2. Propose additions to .github/copilot-instructions.md: terminology (intake,
+   programme, course unit), "no public sign-up", and the attendance rule.
+3. List the new Phase 2 permissions for each role in docs/RBAC_MATRIX.md (admin,
+   admissions_officer, admissions_head, registrar, bursar, lecturer, student).
+4. List existing docs or prompts that still say "term", "semester" or
+   "register" in the sign-up sense.
+```
+
+### 2.1 Academic Structure Schema
+
+**Mode:** Ask
+**Context:** `#file:prisma/schema.prisma #file:docs/ACADEMIC_MODEL.md`
+
+```text
+Add Prisma models for the academic structure.
+
+Models:
+- Faculty (code, name)
+- Department (facultyId, code, name)
+- Programme (departmentId, code, name, awardLevel enum, durationYears)
+- AcademicYear (label e.g. "2026", startDate, endDate)
+- Intake (academicYearId, sequence 1..3, name, startDate, endDate,
+  selectionOpensAt, selectionClosesAt, status enum: UPCOMING, SELECTION_OPEN,
+  ACTIVE, CLOSED)
+
+Constraints: unique (academicYearId, sequence); sequence limited to 1..3;
+unique codes; sensible onDelete behavior; indexes; timestamps.
+Intake names are data, not enums. Add /// doc comments on every model and field.
+
+Do NOT generate APIs. Do not modify auth models. Never name anything Term or Semester.
+```
+
+### 2.2 Course Unit & Curriculum Schema
+
+**Mode:** Ask
+**Context:** `#file:prisma/schema.prisma #file:docs/ACADEMIC_MODEL.md`
+
+```text
+Add Prisma models for course units, curriculum and offerings.
+
+Models:
+- CourseUnit (code unique, name, creditUnits, level, ownerDepartmentId,
+  isGeneral Boolean, openToAllFaculties Boolean, status)
+- CourseUnitFacultyEligibility (courseUnitId, facultyId)
+- ProgrammeCourseUnit (programmeId, courseUnitId, studyYear, intakeSlot 1..3,
+  type enum CORE | ELECTIVE); unique (programmeId, courseUnitId)
+- ProgrammeElectiveRule (programmeId, studyYear, intakeSlot, minCredits,
+  maxCredits)
+- CourseUnitPrerequisite (courseUnitId, prerequisiteId)
+- CourseUnitOffering (courseUnitId, intakeId, capacity nullable, status);
+  UNIQUE (courseUnitId, intakeId): ONE offering per unit per intake, shared
+  by all programmes
+
+Add indexes, enums, timestamps and /// comments. Do NOT generate APIs.
+```
+
+### 2.3 Student, Lecturer & Enrollment Schema
+
+**Mode:** Ask
+**Context:** `#file:prisma/schema.prisma`
+
+```text
+Add Prisma models for students, lecturers and course unit selection.
+
+Models:
+- Student (userId one-to-one, studentNumber unique, personal details)
+- Lecturer (userId one-to-one, departmentId, staffNumber unique)
+- OfferingLecturer (offeringId, lecturerId, role enum PRIMARY | ASSISTANT)
+- ProgrammeEnrollment (studentId, programmeId, admissionIntakeId,
+  studyMode enum ONLINE | PHYSICAL, currentStudyYear, currentIntakeSlot,
+  status ACTIVE | DEFERRED | COMPLETED | WITHDRAWN); history preserved,
+  no destructive updates; study mode changes logged
+- IntakeRegistration (studentId, intakeId, status); unique (studentId, intakeId)
+- UnitRegistration (studentId, offeringId, intakeId, status SELECTED | DROPPED |
+  COMPLETED, isRetake, selectedAt); unique (studentId, offeringId)
+
+Add indexes, enums, timestamps and /// comments. Do NOT generate APIs.
+Do not modify auth models.
+```
+
+### 2.4 Admissions Schema
+
+**Mode:** Ask
+**Context:** `#file:prisma/schema.prisma`
+
+```text
+Add Prisma models for admissions.
+
+Models:
+- Application (applicant name, email, phone, dateOfBirth, nationality,
+  desiredProgrammeId, desiredIntakeId, studyMode ONLINE | PHYSICAL,
+  source WEBSITE | ADMISSION_OFFICE, externalRef nullable unique (the website's
+  application id), status enum SUBMITTED | UNDER_REVIEW | DOCS_APPROVED |
+  DOCS_REJECTED | FEE_CONFIRMED | ADMITTED | REJECTED | WITHDRAWN,
+  enteredById nullable, admittedById, admittedAt, studentId nullable)
+- ApplicationDocument (applicationId, type enum ID | TRANSCRIPT | CERTIFICATE |
+  PHOTO | OTHER, storageKey, status PENDING | APPROVED | REJECTED,
+  reviewerNote, reviewedById, reviewedAt)
+- ApplicationFeeRecord (applicationId, amountMinor Int, currency, bankName,
+  bankReference, depositDate, recordedById, status RECORDED | VOIDED, void
+  fields); unique (bankName, bankReference)
+- AdmissionRecord (applicationId unique, studentId, programmeId,
+  admissionIntakeId, studyMode, admittedById, admittedAt)
+
+Add indexes, enums, timestamps and /// comments. Do NOT generate APIs.
+```
+
+### 2.5 Sessions & Attendance Schema
+
+**Mode:** Ask
+**Context:** `#file:prisma/schema.prisma`
+
+```text
+Add Prisma models for class sessions and attendance.
+
+Models:
+- TimetableSlot (offeringId, dayOfWeek, startTime, endTime, room nullable,
+  deliveryMode PHYSICAL | ONLINE | HYBRID, defaultMeetingUrl nullable)
+- ClassSession (offeringId, slotId nullable, startsAt, endsAt, deliveryMode,
+  room nullable, meetingUrl nullable, meetingProvider nullable,
+  externalMeetingId nullable, status SCHEDULED | HELD | CANCELLED)
+- SessionJoin (sessionId, studentId, clickedAt): log of Attend clicks
+- PresenceInterval (sessionId, studentId, joinedAt, leftAt, source
+  PROVIDER_WEBHOOK | REPORT_IMPORT | MANUAL)
+- AttendanceRecord (sessionId, studentId, status PRESENT | ABSENT,
+  method ONLINE_PRESENCE | LECTURER_MARKED, longestContinuousSeconds,
+  totalSeconds, computedAt, overriddenById, overrideReason);
+  unique (sessionId, studentId)
+- AttendanceRule (minContinuousPercent default 75, reconnectGraceSeconds
+  default 180, minAttendancePercentWarning default 75)
+
+Add indexes, enums, timestamps and /// comments. Do NOT generate APIs.
+```
+
+### 2.6 Announcements & Calendar Schema
+
+**Mode:** Ask
+**Context:** `#file:prisma/schema.prisma`
+
+```text
+Add Prisma models for announcements and the academic calendar.
+
+Models:
+- Announcement (title, body, imageKey nullable, category enum GENERAL |
+  ACADEMIC | FINANCE | EXAM | EVENT, status DRAFT | PUBLISHED | ARCHIVED,
+  isPinned, sortOrder, publishAt, expiresAt nullable, createdById)
+- AnnouncementAudience (announcementId, audienceType enum ALL_STUDENTS |
+  ALL_LECTURERS | ROLE | FACULTY | PROGRAMME | INTAKE | COURSE_UNIT_OFFERING,
+  targetId nullable)
+- CalendarEvent (title, description, type enum HOLIDAY | ACADEMIC | EVENT,
+  startsAt, endsAt, allDay, createdById)
+- CalendarEventAudience (same shape as AnnouncementAudience)
+
+Index (status, publishAt, expiresAt). Intake dates and class sessions are
+DERIVED in the calendar, not stored as events. Add /// comments.
+Do NOT generate APIs.
+```
+
+### 2.7 Migration, RBAC & Seed
+
+**Mode:** Edit
+**Context:** `#file:docs/RBAC_MATRIX.md #file:prisma/seed.ts`
+
+```text
+1. Give me the commands to migrate.
+2. Seed the roles admissions_officer and admissions_head (idempotent; keep the
+   existing roles) and add the Phase 2 permissions to docs/RBAC_MATRIX.md and the
+   seed, exactly as the matrix defines them:
+   admissions:application:manage, admissions:document:review (admissions_officer
+   and admissions_head); admissions:admit, admissions:reject,
+   admissions:study-mode:change (admissions_head); admissions:fee:confirm
+   (bursar); academic:structure:manage, academic:curriculum:manage,
+   academic:offering:manage, academic:offering:assign-lecturer,
+   academic:session:manage (registrar; lecturer OWN for sessions);
+   academic:unit:select, academic:session:attend (student OWN);
+   academic:classlist:read, attendance:review, attendance:override (lecturer
+   OWN); announcements:manage, calendar:event:manage (registrar);
+   announcements:post-own (lecturer OWN offerings).
+   admin:user:manage already exists from Phase 1 update 1.11. Do NOT give admin
+   any admissions, academic or finance permission.
+3. Extend prisma/seed.ts with development-only sample data (skip when
+   NODE_ENV=production; idempotent; keep existing sections):
+   - 1 academic year, 3 intakes (January, May, September)
+   - Faculties: Science & Technology, Health Sciences, Law, Business
+   - Programmes: BSc Computer Science, BSc Nursing, LLB Law, BBA Business
+   - About 14 course units incl. 3 GENERAL units with eligible faculties
+   - Curriculum with CORE and ELECTIVE units per study year/intake slot
+   - Offerings with lecturers; timetable slots; sessions (physical, online with
+     a placeholder meeting URL, hybrid)
+   - 5 lecturers; 20 students (mixed ONLINE and PHYSICAL)
+   - Sample applications in different statuses
+   - Default AttendanceRule; announcements and calendar events
+```
+
+### 2.8 Academic Structure Services
 
 **Mode:** Edit
 
 ```text
-Create registrar pages in apps/web: student list (search, filter, pagination),
-student detail, course and offering management.
+Create apps/api/src/academic services: FacultiesService, DepartmentsService,
+ProgrammesService, AcademicYearsService, IntakesService.
+
+Rules:
+- createAcademicYear creates its THREE intakes (sequence 1..3) in one
+  transaction; intakes cannot overlap; a year cannot have more than three
+- The selection window must close before the intake's end date
+- Intake status transitions: UPCOMING > SELECTION_OPEN > ACTIVE > CLOSED
+- Soft delete where records are referenced
+
+Services and repositories only. No controllers or guards yet.
+```
+
+### 2.9 Course Unit & Curriculum Services
+
+**Mode:** Edit
+
+```text
+Create CourseUnitsService, CurriculumService and OfferingsService.
+
+CourseUnitsService: CRUD; mark a unit general; set eligible faculties or
+openToAllFaculties.
+CurriculumService: set the course units for a programme by studyYear +
+intakeSlot as CORE or ELECTIVE; elective min/max credits; prerequisites with
+cycle rejection.
+OfferingsService: ONE offering per unit per intake (reject duplicates);
+bulk-create offerings for an intake from the curriculum; capacity; assign,
+replace and remove lecturers (PRIMARY and ASSISTANT); copy offerings and
+lecturers from the previous intake.
+
+Services only. No controllers yet.
+```
+
+### 2.10 Admissions Services
+
+**Mode:** Edit
+**Context:** `#file:prisma/schema.prisma`
+
+```text
+Create apps/api/src/admissions services.
+
+ApplicationsService: create (staff entry at the admission office, or from the
+website), update, withdraw.
+DocumentReviewService: approve or reject each document with a note; when all
+required documents are approved the application becomes DOCS_APPROVED.
+ApplicationFeeService: record the fee (bank, reference, amount, date), reject a
+duplicate (bank, reference); FEE_CONFIRMED when the amount meets the configured
+application fee; void with reason (never delete).
+AdmissionService.admit(applicationId, adminId, studyMode): allowed ONLY if
+documents are approved AND the fee is confirmed, otherwise a typed error. The
+admitting user (admissions:admit) must differ from the user who approved the
+documents. In one
+transaction: create the User (student role, via AdminUsersService), Student,
+AdmissionRecord, ProgrammeEnrollment (with studyMode) and IntakeRegistration.
+Send the credentials email AFTER the commit; an email failure must not undo the
+admission (record it and allow resend). The programme's course units for the
+student's first study year and intake slot then appear as prompted units.
+
+Also a secured website intake: POST /integrations/applications guarded by an API
+key or HMAC signature, rate limited, idempotent by externalRef.
+Services and that one endpoint only.
+```
+
+### 2.11 SIS Services
+
+**Mode:** Edit
+
+```text
+Create StudentsService, ProgrammeEnrollmentService and LecturersService.
+
+Features:
+- Student CRUD (soft delete), search, pagination, unique student numbers
+- Enrollment history preserved; defer, withdraw, complete
+- Study mode change (admin only, written reason, audit log)
+- Progression: advance currentStudyYear and currentIntakeSlot after an intake
+  completes
+- Lecturer profiles linked to a department
+
+Use Prisma transactions where several writes happen. Services only.
+```
+
+### 2.12 Course Unit Selection Logic (Prompted Units)
+
+**Mode:** Edit
+
+```text
+Create UnitSelectionService in apps/api/src/academic.
+
+getPromptedUnits(studentId, intakeId) returns:
+- core: CORE units for the student's programme at their study year and intake
+  slot (pre-selected, compulsory)
+- electives: ELECTIVE units for that slot, with the min/max credit rule
+- retakes: units the student failed or missed earlier (isRetake)
+- generalUnits: general units open to the student's faculty
+Each item includes the offering, primary lecturer, seats left and sessions.
+
+selectUnits(studentId, intakeId, offeringIds) validates:
+- Selection window open; programme or faculty eligibility; prerequisites passed
+- Capacity; timetable clashes; credit load limits; core units included;
+  elective min/max met; no duplicates
+Return typed error reasons. One transaction. Also dropUnit (before the deadline)
+and admin override with audit log. Service only.
+```
+
+### 2.13 Class Sessions & Online Meeting Services
+
+**Mode:** Edit
+
+```text
+Create TimetableService, SessionService and AttendService.
+
+TimetableService: manage slots; generateSessions for an offering or intake
+from its slots across the intake dates, skipping HOLIDAY calendar events;
+detect room and lecturer clashes (a lecturer teaching shared offerings must not
+double-book); a student's weekly schedule.
+SessionService: set a meeting link per session (https only, host allow-list from
+config), cancel, reschedule.
+AttendService.attend(studentId, sessionId): student must have selected the
+offering; study mode must be ONLINE (physical students get a clear message);
+the session must have a link and be within [start minus 10 minutes, end];
+log a SessionJoin; return { meetingUrl } using MeetingProvider.getJoinUrl.
+
+Define a MeetingProvider interface (getJoinUrl, optional fetchPresence) and a
+ManualLinkProvider that returns the stored link. NEVER include meetingUrl in
+list or detail responses; only attend() returns it.
+Services only.
+```
+
+### 2.14 Attendance Engine
+
+**Mode:** Edit
+
+```text
+Create AttendanceService.
+
+Pure function computeContinuousPresence(intervals, session, rule): clip to the
+session window, merge intervals whose gaps are at most reconnectGraceSeconds,
+take the LONGEST merged interval, PRESENT only if it is at least
+minContinuousPercent of the session length. Separate short visits are NEVER
+added together (on-and-off does not count). Unit test this function heavily.
+
+Service features:
+- importPresenceReport(sessionId, csv): parse the meeting tool's attendance report
+  (email, join, leave), match students by email, list unmatched rows
+- ingestPresenceEvents(sessionId, events): interface for a future provider adapter
+- computeSessionAttendance(sessionId): idempotent; run by a job after the
+  session ends
+- Physical sessions: lecturer marks present/absent (bulk and per student)
+- Lecturer override with a written reason (audit)
+- Percentages: per student per offering (PRESENT / sessions HELD) and overall per
+  intake, with a below-minimum flag from AttendanceRule
+Service only.
+```
+
+### 2.15 Announcements, Calendar & Home Services
+
+**Mode:** Edit
+
+```text
+Create AnnouncementsService, CalendarService and HomeService.
+
+AnnouncementsService: create, update, publish, archive; getForUser(userId, limit)
+returns published, unexpired announcements matching the user's audience
+(student: all students, faculty, programme, intake, selected offerings;
+lecturer: all lecturers, own offerings), pinned first then newest. Lecturers may
+post only to their own offerings. Sanitize the body on the server (no scripts)
+and store images via StorageService.
+CalendarService with a CalendarEventProvider interface and registry:
+getEvents(userId, from, to, max 62 days) merges calendar events by audience,
+intake milestones, class sessions of the user's selected or taught offerings,
+and events from registered providers (assignments in Phase 4, exams in Phase 5).
+HomeService: getStudentHome, getLecturerHome, getRegistrarHome in ONE call each.
+Student: profile summary (name, photo, programme, intake, study mode), up to 5
+announcements, current-month events, selected course units each with next
+session { startsAt, deliveryMode, canAttend } (no meeting URL), attendance
+summary (overall, per unit, below-minimum flag). Cache per user in Redis for
+60 seconds with invalidation on selection and attendance changes.
+Services only.
+```
+
+### 2.16 Controllers & RBAC
+
+**Mode:** Edit
+**Context:** `#file:docs/RBAC_MATRIX.md`
+
+```text
+Create controllers and DTOs for every Phase 2 service.
+
+Apply @Roles/@Permissions exactly per RBAC_MATRIX.md:
+- Admin: staff users only (the Phase 1 endpoints); no admissions, academic or
+  finance endpoints
+- Admissions officer: applications and document review; admissions head: admit,
+  reject, study mode change
+- Bursar: confirm application fees (void authority arrives with finance_manager
+  in Phase 3)
+- Registrar: structure, curriculum, offerings, lecturers, sessions,
+  announcements, calendar
+- Lecturer (OWN offerings only): class lists, sessions and links, attendance
+  review, override, report upload, own announcements
+- Student (OWN only): prompted units, select/drop, timetable, POST
+  /sessions/:id/attend, attendance, announcements, calendar, GET /me/home
+
+Use class-validator DTOs, pagination DTO and Swagger decorators.
+Do not modify the services.
+```
+
+### 2.17 Tests
+
+**Mode:** Edit
+
+```text
+Write tests for the Phase 2 services.
+
+Cover: admit rejected without approved documents or without a confirmed fee;
+admit creates user, student, enrollment, and emails credentials; email failure
+does not undo admission; three
+intakes per year; one offering per unit per intake; prompted units for a
+Computer Science student; a Law student can select a general unit but not a
+Computer Science only unit; shared offering class lists; closed selection window;
+prerequisite, capacity, clash and credit rules; Attend rules (physical student
+refused, outside time window refused, link never in list responses);
+computeContinuousPresence (one long stay present; two short visits that add up
+but are not continuous absent; reconnect within grace present); lecturer sees
+only own class lists; announcement audience matching; home data.
+
+Do not change production code; list bugs instead.
+```
+
+### 2.18 App Shell & Navigation Rails
+
+**Mode:** Edit
+**Context:** `#file:docs/DESIGN_SYSTEM.md`
+
+```text
+Create the shared app shell in apps/web (no page content yet).
+
+- AppShell with a NavigationRail (bg brand, white icons and labels, active item
+  with translucent white overlay and aria-current, collapsible to icons with
+  tooltips, grouped sections) and a TopBar (current intake label, profile avatar
+  menu with Profile, Settings, Sign out and a role switcher for multi-role users)
+- Mobile: the rail becomes a slide-over drawer
+- nav.config.ts: items per role {label, icon (lucide-react), href, permission,
+  enabled}; enabled:false items are not shown. Phase 2 items:
+  Student: Home, My Programme, Course Units, Timetable, Attendance, Announcements
+  Lecturer: Home, My Course Units, Class Sessions, Attendance, Announcements
+  Registrar: Home, Faculties & Departments, Programmes, Intakes, Course Units,
+  Curriculum, Offerings & Lecturers, Class Sessions, Students, Announcements, Calendar
+  Admin: Home, Users (Feature Flags arrive in Phase 3, Audit Log in Phase 7)
+  Admissions officer: Home, Applications
+  Admissions head: Home, Applications (with Admit), Study Mode Changes
+  Bursar: Application Fees (Home arrives in Phase 3)
+- Update the EXISTING login flow to redirect by role to /student, /lecturer,
+  /finance, /registrar, /admissions, /admin; wrong-role routes show a 403 page
+- Skip-to-content link, nav landmark, keyboard support, accent focus ring
+Create placeholder home pages only. Do not modify backend code.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
+```
+
+### 2.19 Student Home Page
+
+**Mode:** Edit
+**Context:** `#file:docs/ACADEMIC_MODEL.md`
+
+```text
+Create /student inside the AppShell. Everything else is reached through the
+navigation rail; the home page shows ONLY:
+
+1. Hero (brand background): profile icon (photo or initials, links to the
+   profile); time-of-day greeting "Good morning, <first name>" with programme
+   and current intake underneath; announcements slider beside it: up to 5
+   slides (pinned first), each with category badge, title, excerpt, optional
+   image, "Read more" opening the full text in a dialog; arrows, dots, swipe,
+   auto-advance every 6s, pause on hover and focus, no auto-advance when
+   prefers-reduced-motion; empty state "No announcements right now".
+2. Calendar: month view (shadcn Calendar) with event markers and a day agenda
+   (classes, intake and academic dates; icon + label per type, not color alone).
+3. My course units: selected units for the current intake (code, name,
+   lecturer, next class). ONLINE students get an "Attend" button when
+   canAttend is true: it calls POST /sessions/:id/attend and opens the returned
+   meetingUrl in a new tab. PHYSICAL students see the room. Empty state with a
+   "Select course units" button when the selection window is open.
+4. Attendance percentage: one overall percentage in a teal badge; below the
+   minimum it switches to the warning style with an icon and "Below minimum";
+   small per-unit percentages; "No sessions yet" state.
+
+Layout: desktop hero full width, calendar left, course units above attendance on
+the right; mobile order: hero, attendance, course units, calendar.
+Load from ONE request GET /me/home (TanStack Query) with skeletons and a retry
+state. Do NOT add fees, GPA, exams or assignments to this page.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
+```
+
+### 2.20 Lecturer, Registrar, Admissions & Admin Home Pages
+
+**Mode:** Edit
+
+```text
+Create /lecturer, /registrar, /admissions and /admin home pages using the same hero (profile
+icon, greeting, announcements slider) and calendar components as the student
+home. Reuse components; do not copy code.
+
+Role widgets:
+- Lecturer: my course units this intake with student counts; today's sessions
+  with an "Open meeting" button for the lecturer's own online sessions
+- Registrar: current intake status and course unit selection progress; "needs
+  attention" items in warning style (offerings without a lecturer, admitted
+  students who have not selected units)
+- Admissions (officer and head): applications awaiting review, awaiting fee
+  confirmation, and ready to admit
+- Admin: accounts needing attention (expired temporary passwords, deactivated
+  users)
+
+Load each from its GET /me/home response. Do not modify backend code.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
+```
+
+### 2.21 Student Portal UI
+
+**Mode:** Edit
+
+```text
+Create student pages in apps/web, all reached through the navigation rail:
+/student/programme (my programme and curriculum), /student/course-units,
+/student/timetable, /student/attendance, /student/announcements.
+
+Course Units page: units for the student's programme are ALREADY LOADED for the
+open intake; show them in groups: Core (pre-selected, locked), Electives
+(choose within min/max, show credits used), Retakes, General units (shared across
+faculties, "Shared" label). Show lecturer, seats left and sessions per unit;
+clash, prerequisite and credit errors inline; total credits panel; confirm
+dialog. After confirming, a "Selected" tab lists units with lecturer and sessions.
+Timetable: sessions with "Attend" for open ONLINE sessions (physical students
+see the room). Attendance: percentage per unit, per-session status, and a short
+explanation of the continuous-time rule.
+
+Use existing endpoints only. Do not modify backend code.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
+```
+
+### 2.22 Lecturer UI
+
+**Mode:** Edit
+
+```text
+Create lecturer pages in apps/web:
+- /lecturer/units: my offerings per intake
+- /lecturer/units/[offeringId]: class list showing each student's programme and
+  study mode (shared units mix programmes)
+- /lecturer/sessions: create and edit sessions, paste the meeting link
+  (validate https), mark HELD or CANCELLED
+- Attendance review per session: each student's longest continuous time and
+  status; upload the meeting tool's attendance report; mark physical attendance
+  (bulk "present" plus per-student overrides); override with a required reason
+- Post an announcement to my own offerings
+
+Use shadcn/ui data tables and TanStack Query. Guard by role.
+Do not modify backend code.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
+```
+
+### 2.23 Registrar UI
+
+**Mode:** Edit
+
+```text
+Create registrar pages in apps/web:
+- Faculties, departments, programmes
+- Academic years and intakes (three per year; edit selection windows and status)
+- Course units (toggle General, choose eligible faculties or "all faculties")
+- Curriculum builder: set the units for a programme by study year and intake
+  slot, Core or Elective, elective credit limits
+- Offerings per intake: bulk-create from the curriculum, assign lecturer(s),
+  capacity, selected counts
+- Class sessions: generate from the timetable, edit, cancel
+- Student list (search, filter, pagination) and detail incl. study mode history
+- Announcements and calendar event management with audience pickers
 
 Use shadcn/ui data tables and TanStack Query. Guard routes by role.
 Do not modify backend code.
@@ -564,14 +1334,45 @@ Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md
 Comment every component and major JSX section.
 ```
 
-### 2.11 Document the Phase
+### 2.24 Admissions UI
+
+**Mode:** Edit
+
+```text
+Create admin pages in apps/web:
+- /admin/applications: list with filters (status, programme, intake, source)
+  and a "New application" form for the admission office
+- Application detail: applicant info; documents with approve/reject and a
+  required note (viewed through signed URLs); an application fee card with a
+  "Record fee" form (bank, reference, amount, date) and a clear duplicate error;
+  a progress stepper: Submitted, Documents approved, Fee confirmed, Admitted
+- "Admit" dialog: confirm programme and intake, choose the study mode (Online or
+  Physical), and show what will happen (account created, login emailed, course
+  units loaded). The button is disabled until documents are approved and the fee
+  is confirmed, and shows the reasons
+- After admission: a success state and a "Resend login details" action
+- /finance/application-fees (bursar): applications awaiting fee confirmation, with
+  the same "Record fee" form
+- /admin/users: create staff accounts with roles, resend credentials, deactivate
+  (uses the user-management API from Phase 1 update 1.13)
+
+Use shadcn/ui and TanStack Query. Guard by permission: officers see applications
+and document review; only the admissions head sees Admit and Study Mode Changes;
+only the bursar sees fee recording; only admin sees /admin/users.
+Do not modify backend code.
+
+Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
+Comment every component and major JSX section.
+```
+
+### 2.25 Document the Phase
 
 **Mode:** Ask
 
 ```text
 Write the step documents for Phase 2 using #file:docs/phases/step-template.md.
 
-For each completed step (2.1 to 2.10), create
+For each completed step (2.0 to 2.24), create
 docs/phases/phase-2/step-2.<n>-<name>.md covering: goal, files created or
 changed (paths), key decisions and trade-offs, business rules implemented,
 how to run and test (exact commands), data and permissions impact, known
@@ -579,8 +1380,13 @@ limitations, and Copilot usage notes.
 
 Then:
 1. Append one entry per step to docs/DEVELOPMENT_LOG.md (newest first).
-2. List any decision that deserves an ADR and draft it in docs/adr/.
+2. List decisions that deserve an ADR and draft them in docs/adr/ (intakes
+   replace terms; shared offerings and general units; admissions gating; no
+   public sign-up and temporary credentials; study mode; continuous-time
+   attendance; meeting provider choice).
 3. List out-of-date sections in docs/DATABASE_SCHEMA.md and docs/RBAC_MATRIX.md.
+Include the domain model, the intake calendar, the admissions flow, and a worked
+attendance example (one long stay vs two short visits).
 
 Base everything on the actual code in #codebase. Do not invent features. Do not
 modify source code in this step.
@@ -642,10 +1448,12 @@ Requirements:
   scan key, recordedById, status (RECORDED, VOIDED), voidedById, voidReason,
   voidedAt
 - Unique constraint on (bankName, bankReference) to stop duplicate slips
-- PaymentReference: unique reference number per student, term, invoice
+- Optional applicationId on Payment so application fees use the same flow;
+  migrate Phase 2's ApplicationFeeRecord data into it
+- PaymentReference: unique reference number per student, intake, invoice
 - Receipt number unique and sequential; receipts can be marked VOID
 - TransactionLog is append-only (no update/delete in design)
-- Relations to Term, Program/Offering, Student
+- Relations to Intake, Programme, Student
 - Indexes, enums, timestamps
 
 Do NOT generate APIs. Do not modify existing models.
@@ -660,11 +1468,13 @@ Create FeeStructureService, controller, and DTOs in apps/api/src/finance.
 
 Features:
 - Create and update fee structures
-- Assign fees per program/class and term
-- Validate academic year and term relationships
+- Assign fees per programme and intake (and per study mode, ONLINE or PHYSICAL, if fees differ)
+- Validate academic year and intake relationships
 - Prevent editing a structure once invoices exist (create a new version instead)
 
-RBAC: bursar and admin only. No frontend code.
+RBAC: finance_manager manages fee structures; bursar read-only. Add the
+finance_manager role and the finance permissions to docs/RBAC_MATRIX.md and the
+seed (idempotent). No frontend code.
 ```
 
 ### 3.3 Invoice Generation
@@ -676,7 +1486,7 @@ Create InvoiceService.
 
 Features:
 - Generate invoices for a student on registration
-- Bulk generate per term/class
+- Bulk generate per intake/programme
 - Apply carried-forward credit or debt automatically
 - Idempotent: running twice must not duplicate invoices
 
@@ -692,14 +1502,15 @@ Create PaymentService for the PHYSICAL payment flow (student pays at the bank,
 Finance records it). Service-based architecture.
 
 Features:
-- Generate a unique payment reference for a student/term/invoice (to be written
+- Generate a unique payment reference for a student/intake/invoice (to be written
   on the bank deposit slip)
-- recordBankDeposit(dto, recordedById): student, invoice, amount, bankName,
+- recordBankDeposit(dto, recordedById): student (or applicant for an application
+  fee, which then marks the application's fee as confirmed), invoice, amount, bankName,
   bankReference, depositDate, optional slip scan; reject a duplicate
   (bankName, bankReference) with ConflictException
 - Calculate balance after payment
-- Carry forward excess payments to the next term
-- Calculate outstanding balance and fee-paid percentage per student per term
+- Carry forward excess payments to the next intake
+- Calculate outstanding balance and fee-paid percentage per student per intake
 - voidPayment(id, voidedById, reason): never delete; write a reversing
   TransactionLog entry; the voider must differ from the recorder
 - Write a TransactionLog entry for every change
@@ -738,8 +1549,8 @@ OnlinePaymentController.
 
 Bank-deposit endpoints (ACTIVE): generate reference (student, own only), record
 deposit (any authenticated user with finance:payment:record; several finance
-users allowed), list payments (filters), void payment (admin or second bursar,
-reason required), student statement (own only), daily bank-deposit report.
+users allowed), list payments (filters), void payment (finance_manager only, and a different person from the
+recorder; reason required), student statement (own only), daily bank-deposit report.
 
 Online endpoints (COMING SOON): POST /payments/online/:method/initiate for
 card, bank and mobile. Guard each with @RequireFeature('payments.online.<method>')
@@ -788,6 +1599,7 @@ daily bank-deposit report, fee analytics (Recharts).
 
 Use Next.js, shadcn/ui, TanStack Query. Format money from minor units.
 Do not modify backend code.
+Add the Finance rail items to nav.config.ts and build /finance as the Finance home page using the shared home layout (hero, calendar, today's deposits). Do not create a new layout.
 
 Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
 Comment every component and major JSX section.
@@ -811,6 +1623,7 @@ Create student pages: /student/finance with
   coming soon. Please pay at the bank and collect your receipt from Finance."
 
 Mobile first. Use existing endpoints only. No errors or broken layout.
+Enable the student Finance item in nav.config.ts.
 
 Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
 Comment every component and major JSX section.
@@ -879,7 +1692,7 @@ modify source code in this step.
 ```text
 Add Prisma models for the LMS.
 
-Models: Assignment, AssignmentTarget (class visibility), LearningMaterial,
+Models: Assignment, AssignmentTarget (course unit offering visibility), LearningMaterial,
 Submission, SubmissionFile, Grade, Feedback, ExtensionRequest.
 
 Include relationships, indexes, enums (AssignmentStatus: DRAFT, PENDING_APPROVAL,
@@ -898,11 +1711,12 @@ Create AssignmentService, controller, and DTOs.
 Features:
 - Create and update assignments
 - Deadline tracking
-- Visibility per class/offering
+- Visibility per course unit offering (every student who selected the unit sees it, from any programme)
 - Approval workflow (lecturer submits, head approves)
-- Lecturers can only manage their own offerings
+- Lecturers can only manage their own course unit offerings
 
 Apply RBAC per docs/RBAC_MATRIX.md. No frontend.
+Register a CalendarEventProvider so assignment deadlines appear in calendars.
 ```
 
 ### 4.3 Storage Service
@@ -976,7 +1790,7 @@ RBAC: only the owning lecturer may grade. Students see published marks only.
 ```text
 Write tests for LMS services: deadline enforcement, late vs missed,
 extensions, upload validation (wrong type, oversize, spoofed extension),
-visibility per class, grading permissions, unpublished marks hidden from students.
+visibility per course unit offering, grading permissions, unpublished marks hidden from students.
 Do not change production code; list bugs.
 ```
 
@@ -992,6 +1806,7 @@ Teacher: create/edit assignment, upload materials, submissions list, grading das
 
 Use Next.js, shadcn/ui, TanStack Query. Show upload progress and validation
 errors. Do not modify backend code.
+Enable Assignments/Materials (student) and Assignments/Grading (lecturer) in nav.config.ts.
 
 Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
 Comment every component and major JSX section.
@@ -1045,9 +1860,10 @@ Do NOT generate APIs.
 ```text
 Create ExamService, controller, DTOs.
 
-Features: create exam, publish exam, class visibility, scheduling,
+Features: create exam, publish exam, course unit offering visibility, scheduling,
 deadline management, unpublish before start only.
 RBAC: lecturer and registrar. No frontend.
+Register a CalendarEventProvider so exam dates appear in calendars.
 ```
 
 ### 5.3 Restriction Logic
@@ -1089,7 +1905,7 @@ All state transitions logged. No frontend.
 ```text
 Create TranscriptService.
 
-Features: grade-point mapping from config, semester GPA, cumulative GPA,
+Features: grade-point mapping from config, intake GPA, cumulative GPA,
 academic standing, transcript PDF with school branding (PDFKit).
 Handle retakes using the configured policy (latest or best).
 Include unit tests for GPA math.
@@ -1114,6 +1930,7 @@ Create exam pages in apps/web: exams dashboard, eligibility status with
 clear reasons (e.g. "Fees paid 40%, 60% required"), exam attempts,
 lecturer grading pages, student result pages, transcript download.
 Use shadcn/ui and TanStack Query. Do not modify backend code.
+Enable Exams, Results and Transcript items in nav.config.ts.
 
 Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
 Comment every component and major JSX section.
@@ -1154,7 +1971,7 @@ modify source code in this step.
 Create analytics endpoints in apps/api/src/analytics.
 
 Datasets: finance, attendance, assignments, student performance, teacher workload.
-Support filters: term, program, class, date range.
+Support filters: intake, programme, course unit, date range.
 Use efficient Prisma/SQL aggregations (no N+1). RBAC per role.
 No frontend.
 ```
@@ -1183,6 +2000,7 @@ Components: KPI cards, Recharts charts, data tables, filters, export buttons.
 Use Next.js, shadcn/ui, TanStack Query with skeleton loading states.
 Role-specific dashboards (bursar, registrar, lecturer).
 Do not modify backend code.
+Enable the Reports items in nav.config.ts.
 
 Also apply the UI Footer: use only brand tokens from #file:docs/DESIGN_SYSTEM.md.
 Comment every component and major JSX section.
@@ -1291,7 +2109,7 @@ Explain tradeoffs; do not apply changes yet.
 **Mode:** Edit
 
 ```text
-Write k6 scripts for: login surge, course registration window opening,
+Write k6 scripts for: login surge, course unit selection window opening,
 results-day reads, payment recording. Include thresholds
 (p95 latency, error rate) and a README on running them against staging.
 ```

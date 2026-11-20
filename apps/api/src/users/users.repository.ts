@@ -9,6 +9,8 @@ const authenticationUserSelect = {
   passwordHash: true,
   status: true,
   emailVerified: true,
+  mustChangePassword: true,
+  temporaryPasswordExpiresAt: true,
 } satisfies Prisma.UserSelect;
 
 const publicUserSelect = {

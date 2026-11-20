@@ -52,6 +52,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (
       typeof response === "object" &&
       response !== null &&
+      "code" in response &&
+      response.code === "MUST_CHANGE_PASSWORD"
+    ) {
+      return response.code;
+    }
+
+    if (
+      typeof response === "object" &&
+      response !== null &&
       "message" in response &&
       Array.isArray(response.message)
     ) {

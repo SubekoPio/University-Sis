@@ -1,5 +1,6 @@
 // Purpose: Persist refresh-token-backed authentication sessions.
 import { Injectable } from "@nestjs/common";
+import { UserStatus } from "@prisma/client";
 import type { Prisma, Session } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
 
@@ -93,6 +94,60 @@ export class AuthRepository {
     await this.prisma.session.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: now },
+    });
+  }
+
+  /** Changes a temporary password atomically while preserving only its current session. */
+  async completeTemporaryPasswordChange(
+    userId: string,
+    currentSessionId: string,
+    currentPasswordHash: string,
+    newPasswordHash: string,
+    now: Date,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (transaction) => {
+      const currentSession = await transaction.session.findFirst({
+        where: {
+          id: currentSessionId,
+          userId,
+          revokedAt: null,
+          expiresAt: { gt: now },
+        },
+        select: { id: true },
+      });
+      if (currentSession === null) {
+        return false;
+      }
+
+      const updated = await transaction.user.updateMany({
+        where: {
+          id: userId,
+          status: UserStatus.ACTIVE,
+          passwordHash: currentPasswordHash,
+          mustChangePassword: true,
+          temporaryPasswordExpiresAt: { gt: now },
+        },
+        data: {
+          passwordHash: newPasswordHash,
+          mustChangePassword: false,
+          temporaryPasswordExpiresAt: null,
+          emailVerified: true,
+        },
+      });
+      if (updated.count !== 1) {
+        return false;
+      }
+
+      await transaction.session.updateMany({
+        where: {
+          userId,
+          id: { not: currentSessionId },
+          revokedAt: null,
+        },
+        data: { revokedAt: now },
+      });
+
+      return true;
     });
   }
 }

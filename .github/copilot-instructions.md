@@ -7,6 +7,7 @@ These instructions apply across the University SIS monorepo. Follow the relevant
 - Before planning or changing application code, read `docs/RBAC_MATRIX.md` and `docs/DATABASE_SCHEMA.md` when they have been scaffolded.
 - Until those canonical files exist, use the corresponding planned context in `docs/School_System_Copilot_Roadmap.md` and `docs/School_System_Copilot_Prompts.md` (Phase 0.4). Do not invent permissions or database contracts beyond that source material; if a task needs decisions it does not cover, draft/review the canonical docs first or ask for clarification.
 - Follow the existing project structure and conventions in the affected package.
+- Use "intake" (never "term" or "semester"), "programme", and "course unit"; each academic year has three intakes.
 
 ## TypeScript
 
@@ -20,7 +21,9 @@ These instructions apply across the University SIS monorepo. Follow the relevant
 - Controllers handle HTTP concerns and delegate; they contain no business logic.
 - Put business rules in services and database access in repositories using Prisma.
 - Validate request DTOs with `class-validator`.
-- Protect every endpoint with the appropriate RBAC decorators, based on `docs/RBAC_MATRIX.md`. Do not leave an endpoint unprotected or infer permissions.
+- Protect every endpoint with `@Permissions` from `docs/RBAC_MATRIX.md`; never check role names. Deny by default and enforce its scopes and separation-of-duties rules.
+- Do not provide public sign-up: admins create accounts, and students are admitted.
+- Mark online attendance PRESENT only after a continuous stay meets the configured session share; never add interrupted time. Never return meeting URLs in list or detail responses.
 - Store monetary amounts as integer minor units. Never store or calculate money as floating-point values.
 
 ## Code comments

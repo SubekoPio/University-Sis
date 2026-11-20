@@ -4,8 +4,12 @@ applyTo: "**/*.prisma"
 
 # Prisma Instructions
 
+- Use "intake" (never "term" or "semester"), "programme", and "course unit"; there are three intakes per academic year.
+- Do not model public student sign-up: admins create accounts and student accounts follow admission.
+- Preserve the continuous online-attendance rule; interrupted intervals must not be summed toward PRESENT.
 - Read `docs/DATABASE_SCHEMA.md` and `docs/RBAC_MATRIX.md` before changing the Prisma schema when they have been scaffolded. Until then, use the corresponding Phase 0.4 source material in `docs/School_System_Copilot_Roadmap.md` and `docs/School_System_Copilot_Prompts.md`; do not invent data or permission contracts beyond it.
 - Keep schema changes aligned with the documented database model and established repository boundaries.
+- Align permission data with `docs/RBAC_MATRIX.md`; deny by default and preserve permission scopes and separation-of-duties constraints.
 - Store monetary values as integer minor units; do not use floating-point database types for money.
 - Add `///` documentation for every model and field, describing intent and relevant constraints.
 - Preserve relations, referential behavior, indexes, uniqueness, and nullability required by the documented model. Do not make unrelated schema changes.

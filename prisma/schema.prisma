@@ -17,32 +17,95 @@ enum UserStatus {
 
   /// The account is disabled and cannot authenticate.
   DISABLED
+
+  /// The account has been deactivated and cannot authenticate.
+  DEACTIVATED
 }
 
 /// An account identity used to authenticate and authorize access to the SIS.
 model User {
   /// Stable UUID identifying the account.
-  id                      String                   @id @default(uuid()) @db.Uuid
+  id                         String                   @id @default(uuid()) @db.Uuid
   /// Normalized login email address, unique across all accounts.
-  email                   String                   @unique
+  email                      String                   @unique
+  /// Display name; nullable to preserve existing accounts without known names.
+  name                       String?
   /// Password verifier; plaintext passwords must never be stored.
-  passwordHash            String
+  passwordHash               String
   /// Current account lifecycle state.
-  status                  UserStatus               @default(ACTIVE)
+  status                     UserStatus               @default(ACTIVE)
+  /// Require the account holder to choose a new password at their next login.
+  mustChangePassword         Boolean                  @default(false)
+  /// Expiration time for an administrator-issued temporary password.
+  temporaryPasswordExpiresAt DateTime?
+  /// User account that created this account, when known.
+  createdById                String?                  @db.Uuid
+  /// Administrator who created this account.
+  createdBy                  User?                    @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  /// Accounts created by this user.
+  createdUsers               User[]                   @relation("UserCreatedBy")
+  /// Time the account was deactivated, if applicable.
+  deactivatedAt              DateTime?
+  /// User account that deactivated this account, when known.
+  deactivatedById            String?                  @db.Uuid
+  /// User account responsible for the deactivation.
+  deactivatedBy              User?                    @relation("UserDeactivatedBy", fields: [deactivatedById], references: [id], onDelete: SetNull)
+  /// Accounts deactivated by this user.
+  deactivatedUsers           User[]                   @relation("UserDeactivatedBy")
+  /// Audit records attributed to this user.
+  auditEntries               AuditLog[]               @relation("AuditActor")
   /// Whether the account's email address has been verified.
-  emailVerified           Boolean                  @default(false)
+  emailVerified              Boolean                  @default(false)
   /// Roles assigned to this account.
-  roles                   UserRole[]
+  roles                      UserRole[]
   /// Active and historical authentication sessions for this account.
-  sessions                Session[]
+  sessions                   Session[]
   /// Password recovery tokens issued to this account.
-  passwordResetTokens     PasswordResetToken[]
+  passwordResetTokens        PasswordResetToken[]
   /// Email verification tokens issued to this account.
-  emailVerificationTokens EmailVerificationToken[]
+  emailVerificationTokens    EmailVerificationToken[]
   /// Time the account was created.
-  createdAt               DateTime                 @default(now())
+  createdAt                  DateTime                 @default(now())
   /// Time the account was most recently updated.
-  updatedAt               DateTime                 @updatedAt
+  updatedAt                  DateTime                 @updatedAt
+
+  /// Support lookup of expired temporary passwords.
+  @@index([temporaryPasswordExpiresAt])
+  /// Support lookup of accounts created by a user.
+  @@index([createdById])
+  /// Support lookup of accounts deactivated by a user.
+  @@index([deactivatedById])
+  /// Support administrative name searches.
+  @@index([name])
+}
+
+/// An immutable record of a sensitive action performed in the SIS.
+model AuditLog {
+  /// Stable UUID identifying the audit record.
+  id           String   @id @default(uuid()) @db.Uuid
+  /// User who performed the action, when the actor still exists.
+  actorId      String?  @db.Uuid
+  /// Stable action key describing the event.
+  action       String
+  /// Kind of resource affected by the event.
+  resourceType String
+  /// Identifier of the affected resource, when applicable.
+  resourceId   String?
+  /// Required explanation for actions that require a reason.
+  reason       String?
+  /// Non-secret event details; never include passwords or token contents.
+  metadata     Json?
+  /// IP address associated with the action when available.
+  ip           String?
+  /// User who performed the action; preserve the audit record if deleted.
+  actor        User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  /// Time the immutable audit record was created.
+  createdAt    DateTime @default(now())
+
+  /// Support audit lookups by actor and time.
+  @@index([actorId, createdAt])
+  /// Support audit lookups by affected resource and time.
+  @@index([resourceType, resourceId, createdAt])
 }
 
 /// A named group of permissions assignable to users.

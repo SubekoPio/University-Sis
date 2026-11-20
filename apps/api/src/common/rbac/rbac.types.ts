@@ -5,6 +5,7 @@ import type { Request } from "express";
 export interface AuthenticatedUser {
   id: string;
   email: string;
+  sessionId: string;
 }
 
 /** Roles and permission keys resolved for one account. */

@@ -7,9 +7,12 @@ import { PasswordRecoveryService } from "./password-recovery.service.js";
 import { EmailAddressDto } from "./dto/email-address.dto.js";
 import { LoginDto } from "./dto/login.dto.js";
 import { RefreshTokenDto } from "./dto/refresh-token.dto.js";
-import { RegisterDto } from "./dto/register.dto.js";
 import { ResetPasswordDto } from "./dto/reset-password.dto.js";
 import { VerifyEmailDto } from "./dto/verify-email.dto.js";
+import { ChangePasswordDto } from "./dto/change-password.dto.js";
+import { CurrentUser } from "../common/rbac/current-user.decorator.js";
+import { JwtAuthGuard } from "../common/rbac/jwt-auth.guard.js";
+import type { AuthenticatedUser } from "../common/rbac/rbac.types.js";
 
 /** Maps authentication HTTP requests to AuthService calls. */
 @Controller("auth")
@@ -34,14 +37,6 @@ export class AuthController {
     });
   }
 
-  /** Registers a user account. */
-  @Post("register")
-  @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  register(@Body() input: RegisterDto) {
-    return this.authService.register(input);
-  }
-
   /** Rotates a refresh token and returns the replacement token pair. */
   @Post("refresh")
   @HttpCode(HttpStatus.OK)
@@ -58,6 +53,24 @@ export class AuthController {
   async logout(@Body() input: RefreshTokenDto): Promise<{ success: true }> {
     await this.authService.logout(input.refreshToken);
     return { success: true };
+  }
+
+  /** Changes the authenticated user's temporary password with per-IP throttling. */
+  @Post("change-password")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard, JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() input: ChangePasswordDto,
+  ): Promise<{ message: string }> {
+    await this.authService.changeTemporaryPassword(
+      user.id,
+      user.sessionId,
+      input.currentPassword,
+      input.newPassword,
+    );
+    return { message: "Password changed successfully." };
   }
 
   /** Sends password-reset instructions without disclosing whether the email exists. */

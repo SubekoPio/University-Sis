@@ -11,6 +11,7 @@ import { HttpExceptionFilter } from "../common/http-exception.filter.js";
 import { CurrentUser } from "../common/rbac/current-user.decorator.js";
 import { Roles } from "../common/rbac/rbac.decorators.js";
 import { JwtAuthGuard } from "../common/rbac/jwt-auth.guard.js";
+import { MustChangePasswordGuard } from "../common/rbac/must-change-password.guard.js";
 import { RolesGuard } from "../common/rbac/roles.guard.js";
 import { RbacService } from "../common/rbac/rbac.service.js";
 import type { AuthenticatedUser, AuthorizationSnapshot } from "../common/rbac/rbac.types.js";
@@ -34,6 +35,8 @@ const activeUser: AuthenticationUser = {
   passwordHash: "argon2-hash",
   status: UserStatus.ACTIVE,
   emailVerified: true,
+  mustChangePassword: false,
+  temporaryPasswordExpiresAt: null,
 };
 
 const sessions = new Map<string, AuthenticationSession>();
@@ -70,6 +73,7 @@ const authRepositoryMock = {
   rotateSession: vi.fn<AuthRepository["rotateSession"]>(),
   revokeSession: vi.fn<AuthRepository["revokeSession"]>(),
   revokeAllUserSessions: vi.fn<AuthRepository["revokeAllUserSessions"]>(),
+  completeTemporaryPasswordChange: vi.fn<AuthRepository["completeTemporaryPasswordChange"]>(),
 };
 
 const passwordHashingMock = {
@@ -103,18 +107,21 @@ const rbacServiceMock = {
 describe("Auth HTTP E2E", () => {
   let app: INestApplication;
   let jwtService: JwtService;
+  let currentUser: AuthenticationUser;
 
   beforeEach(async () => {
     vi.resetAllMocks();
     sessions.clear();
+    currentUser = activeUser;
     usersServiceMock.findForAuthenticationByEmail.mockImplementation(async (email) =>
-      email === activeUser.email ? activeUser : null,
+      email === activeUser.email ? currentUser : null,
     );
-    usersServiceMock.findForAuthenticationById.mockResolvedValue(activeUser);
+    usersServiceMock.findForAuthenticationById.mockImplementation(async () => currentUser);
     passwordHashingMock.verifyPassword.mockImplementation(
       async (passwordHash, password) =>
         passwordHash === activeUser.passwordHash && password === "correct-password",
     );
+    passwordHashingMock.hashPassword.mockResolvedValue("replacement-argon2-hash");
     authRepositoryMock.findByRefreshTokenHash.mockImplementation(
       async (tokenHash) =>
         [...sessions.values()].find((session) => session.refreshTokenHash === tokenHash) ?? null,
@@ -145,6 +152,7 @@ describe("Auth HTTP E2E", () => {
         session.revokedAt = now;
       }
     });
+    authRepositoryMock.completeTemporaryPasswordChange.mockResolvedValue(true);
     authRepositoryMock.revokeAllUserSessions.mockImplementation(async (userId, now) => {
       for (const session of sessions.values()) {
         if (session.userId === userId && session.revokedAt === null) {
@@ -181,6 +189,7 @@ describe("Auth HTTP E2E", () => {
         AuthService,
         PasswordRecoveryService,
         JwtAuthGuard,
+        MustChangePasswordGuard,
         RolesGuard,
         { provide: UsersService, useValue: usersServiceMock },
         { provide: AuthRepository, useValue: authRepositoryMock },
@@ -203,6 +212,7 @@ describe("Auth HTTP E2E", () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    app.useGlobalGuards(moduleRef.get(MustChangePasswordGuard));
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -260,6 +270,124 @@ describe("Auth HTTP E2E", () => {
 
     expect(response.body.code).toBe("UNAUTHORIZED");
     expect(sessions.size).toBe(0);
+  });
+
+  it("restricts forced-change sessions and allows only password change or logout", async () => {
+    // Arrange: sign in with an unexpired administrator-issued temporary password.
+    currentUser = {
+      ...activeUser,
+      mustChangePassword: true,
+      temporaryPasswordExpiresAt: new Date(Date.now() + 60_000),
+    };
+    const login = await request(app.getHttpServer())
+      .post("/auth/login")
+      .send({
+        email: activeUser.email,
+        password: "correct-password",
+      })
+      .expect(200);
+    const accessClaims = await jwtService.verifyAsync<{ sid: string }>(login.body.accessToken);
+
+    // Act: attempt protected, public, refresh, and permitted password-change routes.
+    const protectedResponse = await request(app.getHttpServer())
+      .get("/test-protected")
+      .set("Authorization", `Bearer ${login.body.accessToken}`)
+      .expect(403);
+    const publicResponse = await request(app.getHttpServer())
+      .post("/auth/forgot-password")
+      .set("Authorization", `Bearer ${login.body.accessToken}`)
+      .send({ email: activeUser.email })
+      .expect(403);
+    const refreshResponse = await request(app.getHttpServer())
+      .post("/auth/refresh")
+      .send({ refreshToken: login.body.refreshToken })
+      .expect(403);
+    const logoutLogin = await request(app.getHttpServer())
+      .post("/auth/login")
+      .send({
+        email: activeUser.email,
+        password: "correct-password",
+      })
+      .expect(200);
+    const logoutResponse = await request(app.getHttpServer())
+      .post("/auth/logout")
+      .set("Authorization", `Bearer ${logoutLogin.body.accessToken}`)
+      .send({ refreshToken: logoutLogin.body.refreshToken })
+      .expect(200);
+    const changeResponse = await request(app.getHttpServer())
+      .post("/auth/change-password")
+      .set("Authorization", `Bearer ${login.body.accessToken}`)
+      .send({
+        currentPassword: "correct-password",
+        newPassword: "replacement-password",
+      })
+      .expect(200);
+
+    // Assert: every denied route has the stable code and the change retains this session ID.
+    expect(protectedResponse.body.code).toBe("MUST_CHANGE_PASSWORD");
+    expect(publicResponse.body.code).toBe("MUST_CHANGE_PASSWORD");
+    expect(refreshResponse.body.code).toBe("MUST_CHANGE_PASSWORD");
+    expect(logoutResponse.body).toEqual({ success: true });
+    expect(changeResponse.body).toEqual({
+      message: "Password changed successfully.",
+    });
+    expect(authRepositoryMock.completeTemporaryPasswordChange).toHaveBeenCalledWith(
+      activeUser.id,
+      accessClaims.sid,
+      activeUser.passwordHash,
+      "replacement-argon2-hash",
+      expect.any(Date),
+    );
+  });
+
+  it("directs expired temporary-password sessions to an administrator", async () => {
+    // Arrange: sign a valid session token for an expired forced-change account.
+    currentUser = {
+      ...activeUser,
+      mustChangePassword: true,
+      temporaryPasswordExpiresAt: new Date(Date.now() - 1),
+    };
+    const sessionId = "expired-temporary-password-session";
+    sessions.set(sessionId, {
+      id: sessionId,
+      userId: activeUser.id,
+      refreshTokenHash: "expired-temporary-password-refresh-hash",
+      userAgent: null,
+      ip: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+    });
+    const accessToken = await jwtService.signAsync({
+      sub: activeUser.id,
+      sid: sessionId,
+      email: activeUser.email,
+      exp: Math.floor(Date.now() / 1_000) + 60,
+    });
+
+    // Act: call a disallowed route, then attempt the expired password change.
+    const blockedResponse = await request(app.getHttpServer())
+      .get("/test-protected")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .expect(403);
+    const response = await request(app.getHttpServer())
+      .post("/auth/change-password")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        currentPassword: "correct-password",
+        newPassword: "replacement-password",
+      })
+      .expect(403);
+
+    // Assert: the normalized error tells the user to contact an administrator.
+    expect(blockedResponse.body).toMatchObject({
+      code: "MUST_CHANGE_PASSWORD",
+      message: "Your temporary password has expired. Contact an administrator.",
+    });
+    expect(response.body).toMatchObject({
+      code: "MUST_CHANGE_PASSWORD",
+      message: "Your temporary password has expired. Contact an administrator.",
+    });
+    expect(authRepositoryMock.completeTemporaryPasswordChange).not.toHaveBeenCalled();
   });
 
   it("rotates refresh tokens and rejects reuse of the old token", async () => {

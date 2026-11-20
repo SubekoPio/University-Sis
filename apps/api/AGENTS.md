@@ -23,6 +23,14 @@ Validation works with Zod, Valibot, ArkType or any other Standard Schema library
 
 Nest's packages are ESM only, and this project is ESM too: relative imports end in `.js`, `__dirname` doesn't exist (use `import.meta.dirname`), and tests run on Vitest, so mocks are `vi.fn()`, not `jest.fn()`.
 
+## University SIS invariants
+
+- Use "intake" (never "term" or "semester"), "programme", and "course unit"; there are three intakes per academic year.
+- No public sign-up: admins create accounts and students are admitted. Authorize endpoints with `@Permissions`, never role names; deny by default and follow `docs/RBAC_MATRIX.md`, including separation of duties.
+- ACTIVE payments are physical bank deposits recorded by Finance with receipts. Online card/bank/mobile methods are COMING SOON behind separate `payments.online.*` flags, default OFF; never enable flags in code or seed data.
+- Count online attendance only after the configured continuous-stay share; do not sum interrupted time. Never return meeting URLs in list or detail responses.
+- Keep file headers, exported TSDoc, why-comments, and a phase step document for each micro-phase.
+
 ## Production data: NestJS Observe
 
 This app's production telemetry - traces, errors, logs and metrics - goes to [NestJS Observe](https://observe.nestjs.com). Until `ObserveModule` is registered in `src/app.module.ts`, nothing is sent: `npx @nestjs/observe link` sets it up in one step - it installs `@nestjs/observe`, wires it into the app, and writes the key pair (`OBSERVE_APP_KEY`, `OBSERVE_APP_SECRET`) to `.env`.

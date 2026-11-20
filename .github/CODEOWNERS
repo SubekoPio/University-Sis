@@ -1,0 +1,9 @@
+# Purpose: Route sensitive changes to the teams responsible for governance review.
+# Replace placeholder teams with real organization teams and enable code-owner review.
+/apps/api/src/auth/ @university-sis/auth-reviewers
+/apps/api/src/common/rbac/ @university-sis/rbac-reviewers
+/apps/api/src/finance/ @university-sis/finance-reviewers
+/apps/api/src/admissions/ @university-sis/admissions-reviewers
+/docs/RBAC_MATRIX.md @university-sis/rbac-reviewers
+/prisma/schema.prisma @university-sis/prisma-reviewers
+/prisma/migrations/ @university-sis/prisma-reviewers

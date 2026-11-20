@@ -57,6 +57,12 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Test RBAC matrix checker
+        run: node --test .github/scripts/check-permissions-matrix.test.mjs
+
+      - name: Check permission decorators against RBAC matrix
+        run: node .github/scripts/check-permissions-matrix.mjs
+
       - name: Run lint
         run: pnpm lint
 

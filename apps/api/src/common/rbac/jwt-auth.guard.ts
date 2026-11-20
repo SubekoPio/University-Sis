@@ -53,7 +53,11 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException("The access-token session is inactive.");
     }
 
-    request.user = { id: payload.sub, email: payload.email };
+    request.user = {
+      id: payload.sub,
+      email: payload.email,
+      sessionId: payload.sid,
+    };
     return true;
   }
 

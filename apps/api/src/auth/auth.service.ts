@@ -1,5 +1,11 @@
-// Purpose: Implement registration, login, refresh rotation, and logout workflows.
-import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
+// Purpose: Implement internal account registration, login, forced password changes, and session workflows.
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { UserStatus } from "@prisma/client";
 import { JwtService } from "@nestjs/jwt";
@@ -20,8 +26,9 @@ import { PasswordHashingService } from "./password-hashing.service.js";
 
 const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 900;
 const DEFAULT_REFRESH_TOKEN_TTL_SECONDS = 2_592_000;
+const MUST_CHANGE_PASSWORD_CODE = "MUST_CHANGE_PASSWORD";
 
-/** Handles authentication workflows and refresh-token session lifecycle. */
+/** Handles authentication workflows and access/refresh-token session lifecycle. */
 @Injectable()
 export class AuthService {
   private readonly accessTokenTtlSeconds: number;
@@ -67,7 +74,7 @@ export class AuthService {
     };
   }
 
-  /** Verifies credentials and creates a refresh-token-backed session. */
+  /** Verifies credentials, rejects expired temporary passwords, and creates a session. */
   async login(input: LoginInput, metadata: SessionMetadata = {}): Promise<AuthResult> {
     const email = this.normalizeEmail(input.email);
     const user = await this.usersService.findForAuthenticationByEmail(email);
@@ -80,13 +87,22 @@ export class AuthService {
       throw new UnauthorizedException("Invalid email or password.");
     }
 
+    if (
+      user.mustChangePassword &&
+      (user.temporaryPasswordExpiresAt === null || user.temporaryPasswordExpiresAt <= new Date())
+    ) {
+      throw new UnauthorizedException(
+        "Your temporary password has expired. Contact an administrator.",
+      );
+    }
+
     const tokenBundle = await this.prepareTokenBundle(user, metadata);
     await this.authRepository.createSession(tokenBundle.session);
 
     return { ...tokenBundle.tokens, user: this.toAuthUser(user) };
   }
 
-  /** Rotates a refresh token, revoking the prior session and detecting reuse. */
+  /** Rotates a refresh token, restricting forced-change accounts and detecting reuse. */
   async refreshToken(refreshToken: string, metadata: SessionMetadata = {}): Promise<AuthResult> {
     if (refreshToken.length === 0) {
       throw new UnauthorizedException("Invalid refresh token.");
@@ -114,6 +130,16 @@ export class AuthService {
     if (user === null || user.status !== UserStatus.ACTIVE) {
       await this.authRepository.revokeAllUserSessions(oldSession.userId, now);
       throw new UnauthorizedException("Invalid refresh token.");
+    }
+    if (user.mustChangePassword) {
+      const expired =
+        user.temporaryPasswordExpiresAt === null || user.temporaryPasswordExpiresAt <= now;
+      throw new ForbiddenException({
+        code: MUST_CHANGE_PASSWORD_CODE,
+        message: expired
+          ? "Your temporary password has expired. Contact an administrator."
+          : "Change your temporary password before refreshing this session.",
+      });
     }
 
     const tokenBundle = await this.prepareTokenBundle(user, {
@@ -150,6 +176,63 @@ export class AuthService {
     );
     if (session !== null) {
       await this.authRepository.revokeSession(session.id, new Date());
+    }
+  }
+
+  /** Verifies and replaces a temporary password, preserving the current session only. */
+  async changeTemporaryPassword(
+    userId: string,
+    currentSessionId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.usersService.findForAuthenticationById(userId);
+    if (
+      user === null ||
+      user.status !== UserStatus.ACTIVE ||
+      !(await this.passwordHashing.verifyPassword(user.passwordHash, currentPassword))
+    ) {
+      throw new UnauthorizedException("The current password is incorrect.");
+    }
+
+    if (!user.mustChangePassword) {
+      throw new BadRequestException("A temporary password change is not required.");
+    }
+
+    const temporaryPasswordExpiresAt = user.temporaryPasswordExpiresAt;
+    if (temporaryPasswordExpiresAt === null || temporaryPasswordExpiresAt <= new Date()) {
+      throw new ForbiddenException({
+        code: MUST_CHANGE_PASSWORD_CODE,
+        message: "Your temporary password has expired. Contact an administrator.",
+      });
+    }
+
+    this.validatePassword(newPassword);
+    if (await this.passwordHashing.verifyPassword(user.passwordHash, newPassword)) {
+      throw new BadRequestException(
+        "The new password must be different from the temporary password.",
+      );
+    }
+
+    const newPasswordHash = await this.passwordHashing.hashPassword(newPassword);
+    // Argon2 hashing can cross the expiry boundary, so re-check before persistence.
+    const now = new Date();
+    if (temporaryPasswordExpiresAt <= now) {
+      throw new ForbiddenException({
+        code: MUST_CHANGE_PASSWORD_CODE,
+        message: "Your temporary password has expired. Contact an administrator.",
+      });
+    }
+
+    const changed = await this.authRepository.completeTemporaryPasswordChange(
+      userId,
+      currentSessionId,
+      user.passwordHash,
+      newPasswordHash,
+      now,
+    );
+    if (!changed) {
+      throw new ConflictException("The temporary-password state changed. Sign in again and retry.");
     }
   }
 
