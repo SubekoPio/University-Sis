@@ -1,23 +1,29 @@
 # Database Schema
 
-**Status:** Draft logical model for human review; the initial authentication and
-RBAC migration is applied locally. The email-verification, user-lifecycle, and
-admin-user-management migrations are generated but not yet applied.
-**Last updated:** 2026-11-20
+**Status:** Draft logical model for human review. Authentication, RBAC,
+user-lifecycle, audit, academic structure, course-unit curriculum and offerings,
+student/lecturer enrollment, admissions, class-session/attendance, announcement,
+and calendar models are implemented in Prisma. Academic-structure services and
+course-unit, curriculum, and offering services are implemented without HTTP
+controllers or guards.
+Migration application state must be verified separately for each database.
+**Last updated:** 2026-11-22
 
 ## Purpose and implementation status
 
-This document records the proposed PostgreSQL data model for the University SIS
-and the invariants that future Prisma models and migrations must preserve. The
-architecture uses PostgreSQL as the relational source of truth and Prisma for
-data access ([architecture](./ARCHITECTURE.md)).
+This document records the PostgreSQL data model for the University SIS and the
+invariants that Prisma models and migrations must preserve. The architecture
+uses PostgreSQL as the relational source of truth and Prisma for data access
+([architecture](./ARCHITECTURE.md)).
 
-The authentication, RBAC, user-lifecycle, and audit models are defined in
-[`prisma/schema.prisma`](../prisma/schema.prisma), with migrations under
-`prisma/migrations/`. The initial authentication and RBAC migration is applied
-in the local development setup; the email-verification, user-lifecycle, and
-admin-user-management migrations are generated but still need to be applied.
-Other proposed models and relationships below remain planned.
+Authentication, RBAC, user-lifecycle, audit, and the academic structure,
+course-unit, curriculum, offering, student, lecturer, registration,
+application/admission, session/attendance, announcement, and calendar models
+are defined in
+[`prisma/schema.prisma`](../prisma/schema.prisma), with versioned migrations
+under [`prisma/migrations/`](../prisma/migrations/). Migration application
+state is environment-specific. Other proposed models and relationships below
+remain planned.
 
 The [RBAC matrix](./RBAC_MATRIX.md) is the authorization source of truth.
 Database relationships help resolve record ownership and scope, but do not
@@ -27,8 +33,8 @@ replace API authorization or service-level checks.
 
 - Use PostgreSQL through Prisma repositories. Keep write ownership within the
   module that owns the data; other modules should use its service boundary.
-- Use stable primary keys and explicit foreign keys. Choose and document the
-  concrete ID type before the first migration.
+- Use UUID primary keys and explicit foreign keys, matching the implemented
+  authentication and academic models.
 - Use enums for finite lifecycle states. Final enum members should be agreed
   with the relevant workflow before implementation.
 - Store monetary amounts as integer minor units with an associated currency;
@@ -94,41 +100,137 @@ The application writes audit records and exposes no update/delete operation.
 
 ### Student information and academic structure
 
-| Model                | Purpose and planned relationships                                                | Key constraints                                                                                                                       |
-| -------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `AcademicYear`       | Groups academic periods.                                                         | Prevent overlapping or duplicate year identifiers according to the approved calendar rules.                                           |
-| `Term`               | Period within an academic year; used by offerings and finance.                   | Relate to one academic year; define unique term numbering/labels within that year.                                                    |
-| `Program`            | Organizes a student's course of study and relevant fee structures.               | Final program-to-course rules require registrar approval.                                                                             |
-| `Course`             | Catalog-level course definition.                                                 | Use a stable course identifier; catalog changes must not rewrite historical offerings.                                                |
-| `CourseOffering`     | A course delivered for a term/class, with the assigned teaching context.         | Link to its course and term; capacity and lecturer-assignment rules are enforced by services.                                         |
-| `Student`            | Student-specific SIS record linked one-to-one with `User`.                       | `userId` is unique; preserve admission and enrollment history.                                                                        |
-| `Lecturer`           | Lecturer-specific record linked one-to-one with `User`.                          | `userId` is unique; teaching access is scoped to assigned offerings.                                                                  |
-| `AdmissionRecord`    | Application/admission history for an applicant and its review workflow.          | Keep review history; define how an accepted record links to the resulting student.                                                    |
-| `Enrollment`         | Preserves a student's academic-program/term enrollment history.                  | Do not overwrite or delete prior enrollment history when a student changes status or program.                                         |
-| `CourseRegistration` | Links a student to a specific course offering and registration attempt.          | Unique `(studentId, courseOfferingId)` for one registration record; preserve attempts/status history rather than destructive updates. |
-| `TimetableSlot`      | Scheduled time and location for an offering or class session.                    | Clash detection is a service invariant; precise uniqueness depends on scheduling rules.                                               |
-| `AttendanceRecord`   | Attendance outcome for a student at a scheduled session, including the recorder. | Scope reads to the student's own record or the lecturer's assigned class; confirm the session-level uniqueness rule before migration. |
+| Model                                                                            | Purpose and implementation status                                              | Key constraints                                                                                                                                     |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Faculty`                                                                        | Implemented top-level academic organization containing departments.            | Unique code; hard-delete only when unreferenced, otherwise soft-delete with `deletedAt`.                                                            |
+| `Department`                                                                     | Implemented academic organization within a faculty.                            | Unique code; restrictive faculty relation; hard-delete only when unreferenced, otherwise soft-delete.                                               |
+| `Programme`                                                                      | Implemented course of study owned by a department.                             | Unique code; explicit award level and duration; referenced programmes are soft-deleted.                                                             |
+| `AcademicYear`                                                                   | Implemented calendar grouping for the academic year.                           | Unique label; creates three intakes atomically; referenced years are soft-deleted.                                                                  |
+| `Intake`                                                                         | Implemented configurable academic period within an academic year.              | Unique `(academicYearId, sequence)`; database check limits sequence to 1-3; non-overlap and selection-window rules are service-level.               |
+| `CourseUnit`                                                                     | Implemented catalog unit owned by a department.                                | Unique code; levels are `LEVEL_100`-`LEVEL_400`; statuses are `ACTIVE`, `INACTIVE`, or `RETIRED`; faculty eligibility is explicit.                  |
+| `CourseUnitFacultyEligibility`                                                   | Implemented faculty allowlist entry for a course unit.                         | Composite primary key `(courseUnitId, facultyId)` prevents duplicate eligibility.                                                                   |
+| `ProgrammeCourseUnit`                                                            | Implemented curriculum placement for a programme, study year, and intake slot. | Unique `(programmeId, courseUnitId)`; intake slot is constrained to 1-3; type is `CORE` or `ELECTIVE`.                                              |
+| `ProgrammeElectiveRule`                                                          | Implemented elective-credit rule for a programme curriculum slot.              | Indexed by programme, study year, and intake slot; multiple rules per slot are permitted; slot is constrained to 1-3.                               |
+| `CourseUnitPrerequisite`                                                         | Implemented directed prerequisite relationship between course units.           | Composite primary key `(courseUnitId, prerequisiteId)`; curriculum services reject cycles, while direct database writes can bypass the rule.        |
+| `CourseUnitOffering`                                                             | Implemented shared delivery of a course unit in an intake.                     | Unique `(courseUnitId, intakeId)`; nullable capacity; delivery mode is `PHYSICAL`, `ONLINE`, or `HYBRID`; new and copied offerings start `PLANNED`. |
+| `Student`                                                                        | Implemented student profile linked one-to-one with `User`.                     | Unique user, student number, and optional national ID; schedule is `DAY`, `EVENING`, `WEEKEND`, or `DISTANCE`.                                      |
+| `Lecturer`                                                                       | Implemented lecturer profile linked to `User` and a department.                | Unique user and staff number; department relation is restrictive.                                                                                   |
+| `OfferingLecturer`                                                               | Implemented primary or assistant lecturer assignment for an offering.          | Composite primary key `(offeringId, lecturerId)` prevents duplicate assignments.                                                                    |
+| `ProgrammeEnrollment`                                                            | Implemented current and historical student enrollment in a programme.          | Keep multiple historical records; preserve rows on delete; statuses are `ACTIVE`, `DEFERRED`, `COMPLETED`, or `WITHDRAWN`.                          |
+| `IntakeRegistration`                                                             | Implemented student registration for an intake.                                | Unique `(studentId, intakeId)`; status records the registration lifecycle.                                                                          |
+| `UnitRegistration`                                                               | Implemented student selection, drop, or completion of a shared offering.       | Unique `(studentId, offeringId)`; status is `SELECTED`, `DROPPED`, or `COMPLETED`; retake state is explicit.                                        |
+| The implemented hierarchy is Faculty > Department > Programme. The academic-year |
+| service creates all three intake slots in one transaction; the schema limits     |
+| sequences to 1-3 but does not require all three rows to exist. Course units are  |
+| owned by departments; curriculum placement, faculty eligibility, prerequisites,  |
+| and elective rules are modeled separately. A shared offering is identified by    |
+| course unit and intake, never by programme. Student profiles store demographic   |
+| and contact details and schedule, while `ProgrammeEnrollment` stores programme   |
+| and progression history. Schedule and offering delivery mode are separate        |
+| concepts; changes are recorded through the existing `AuditLog`.                  |
+| Programme-enrollment and course-unit registration history must be retained       |
+| rather than treated as disposable join state. Referenced academic-structure      |
+| records are soft-deleted with `deletedAt`; unreferenced records may be removed.  |
 
-`AcademicYear`, `Term`, `Program`, `Course`, and `CourseOffering` form the
-academic catalog. Students and lecturers link to `User` with one-to-one
-relationships. Students connect to offerings through course registrations;
-enrollment and registration records are historical, not disposable join state.
-The exact cardinality between programs, courses, and offerings must be settled
-before the corresponding migration.
+Course-unit services maintain general-unit faculty eligibility and retire units
+that are referenced by curriculum, prerequisites, or offerings. Curriculum
+services replace one programme slot at a time, validate elective-credit bounds,
+and reject prerequisite cycles. Offering services reject an existing unit/intake
+pair, bulk-create one shared offering for each distinct curriculum unit, and
+copy lecturer assignments from the previous intake. The current schema does not
+enforce one `PRIMARY` lecturer per offering; assignment services serialize
+assignment changes on the offering row and check the rule before writing, but
+direct database writes can bypass the service-level constraint.
+
+### Admissions
+
+| Model                  | Purpose and relationships                                                        | Key constraints                                                                                     |
+| ---------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `Application`          | Applicant's request for a programme and intake, linked to the resulting student. | Nullable unique website `externalRef`; records source, study mode, and student schedule separately. |
+| `ApplicationDocument`  | Object-storage metadata and review result for one supporting document.           | Store only `storageKey`; preserve document type, status, reviewer, and review time.                 |
+| `ApplicationFeeRecord` | Bank-deposit details used to confirm an application fee.                         | Integer minor units; unique `(bankName, bankReference)`; void records include actor, time, reason.  |
+| `AdmissionRecord`      | Admission decision linking an application, student, programme, and intake.       | Unique `applicationId`; retains both the admitted study mode and student schedule.                  |
+
+`StudyMode` (`ONLINE`, `PHYSICAL`) is captured independently from
+`StudentSchedule` (`DAY`, `EVENING`, `WEEKEND`, `DISTANCE`) on applications and
+admission records. Neither field replaces `CourseUnitOffering.deliveryMode`.
+`Application.enteredById` is nullable for website submissions, while
+`admittedById`, `admittedAt`, and `studentId` remain nullable until admission;
+`AdmissionRecord` stores the completed decision. Website application references
+are unique when present. Uploaded document contents remain in object storage,
+not PostgreSQL.
+
+The service layer must keep applicant, programme, intake, schedule, and
+study-mode values consistent between an application and its admission record,
+and copy the admitted schedule to the created student. It must enforce the
+separation-of-duties rules:
+the document reviewer cannot admit the same applicant, and a user who records
+an application-fee deposit cannot void that record. Voids require a reason and
+an audit/reversal record.
+
+### Sessions and attendance
+
+| Model              | Purpose and relationships                                                   | Key constraints                                                                                              |
+| ------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `TimetableSlot`    | Recurring weekly schedule and default room or meeting URL for an offering.  | Uses a weekday and local start/end times; delivery is `PHYSICAL`, `ONLINE`, or `HYBRID`.                     |
+| `ClassSession`     | Dated class meeting linked to an offering and optional timetable slot.      | Stores session delivery, room/link, optional provider identifiers, and `SCHEDULED`/`HELD`/`CANCELLED` state. |
+| `SessionJoin`      | Immutable log of a student's Attend-button click.                           | A click is not proof of presence; retain the session, student, and click time.                               |
+| `PresenceInterval` | Immutable joined/left interval for one student and session.                 | Source is `PROVIDER_WEBHOOK`, `REPORT_IMPORT`, or `MANUAL`; do not sum interruptions for PRESENT.            |
+| `AttendanceRecord` | Computed or lecturer-marked attendance outcome for one student and session. | Unique `(sessionId, studentId)`; stores the longest continuous interval and total seconds.                   |
+| `AttendanceRule`   | System-wide attendance thresholds applied to all sessions.                  | One global row (`id = 1`); defaults are 75%, 180 seconds, and 75%.                                           |
+
+`AttendanceRule` is a singleton configuration row. Its fixed key is enforced by
+a database check constraint; the migration creates the table but does not seed
+a row, so a future initializer must create or upsert `id = 1`. The fixed
+integer key is used only for this global singleton configuration.
+`minContinuousPercent` determines the online
+presence threshold; `minAttendancePercentWarning` controls the home-page
+warning and is not the online presence threshold. Reconnects within the global
+grace period may be merged into the longest continuous interval; separate
+stays must never be added together to mark `PRESENT`. `totalSeconds` is
+informational and does not replace the longest-continuous calculation.
+
+Meeting URLs may be stored on timetable slots or sessions, but must never be
+included in list or detail responses; expose a URL only through the authorized
+Attend flow. `meetingProvider` remains a nullable string key because the
+provider has not been selected. Lecturer overrides require an actor and written
+reason and must be authorized against the assigned offering.
+
+### Announcements and calendar
+
+| Model                   | Purpose and relationships                                                   | Key constraints                                                                             |
+| ----------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `Announcement`          | Authored institutional notice with category, publication state, and window. | Indexed by `(status, publishAt, expiresAt)`; creator is required and retained.              |
+| `AnnouncementAudience`  | Audience selector attached to an announcement.                              | Audience type is shared with calendar events; `targetId` is nullable and polymorphic.       |
+| `CalendarEvent`         | Authored dated holiday, academic event, or general event.                   | Creator is required and retained; indexed by event time and type.                           |
+| `CalendarEventAudience` | Audience selector attached to a calendar event.                             | Uses the same audience types and nullable polymorphic `targetId` as announcement audiences. |
+
+Announcement and calendar-event creators reference `User` with restrictive
+deletion; audience selectors are owned by their parent records and cascade when
+the parent is deleted. Audience `targetId` may identify a role, faculty,
+programme, intake, or course-unit offering, so it has no single foreign-key
+target; validate the target against `audienceType` in the owning service.
+Announcement images are represented by an object-storage key, not file
+contents.
+
+The calendar projection must derive intake dates from `Intake` and class
+sessions from `ClassSession`. Do not create duplicate `CalendarEvent` records
+for either source; persist `CalendarEvent` rows only for authored holidays,
+academic events, and general events.
 
 ### Finance
 
-| Model                 | Purpose and planned relationships                                     | Key constraints                                                                        |
-| --------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `FeeStructure`        | Defines fees for an approved academic/program context.                | Validate that referenced academic years, terms, and programs are compatible.           |
-| `FeeItem`             | An individual charge within a fee structure.                          | Store each amount as integer minor units and include currency.                         |
-| `StudentInvoice`      | Student's billed charges for a term or other approved billing period. | Generation must be idempotent; retain invoice history.                                 |
-| `PaymentReference`    | Student-facing reference tied to a student, term, and invoice.        | Unique reference number and unique `(studentId, termId, invoiceId)` combination.       |
-| `Payment`             | Payment record linked to the student and the invoice/term it settles. | Amount is integer minor units; unique `(bankName, bankReference)` for bank deposits.   |
-| `Receipt`             | Numbered evidence of a recorded payment.                              | Unique receipt number; preserve and mark `VOID` when the associated payment is voided. |
-| `OutstandingBalance`  | Tracks or projects an unpaid amount.                                  | Must reconcile to the authoritative invoice and payment ledger.                        |
-| `CarryForwardBalance` | Tracks an amount carried between billing periods.                     | Derivation and reconciliation rules must be explicit and auditable.                    |
-| `TransactionLog`      | Append-only financial ledger/reversal record.                         | No update/delete; write with the associated payment transaction.                       |
+| Model                 | Purpose and planned relationships                                        | Key constraints                                                                        |
+| --------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `FeeStructure`        | Defines fees for an approved academic/programme context.                 | Validate that referenced academic years, intakes, and programmes are compatible.       |
+| `FeeItem`             | An individual charge within a fee structure.                             | Store each amount as integer minor units and include currency.                         |
+| `StudentInvoice`      | Student's billed charges for an intake or other approved billing period. | Generation must be idempotent; retain invoice history.                                 |
+| `PaymentReference`    | Student-facing reference tied to a student, intake, and invoice.         | Unique reference number and unique `(studentId, intakeId, invoiceId)` combination.     |
+| `Payment`             | Payment record linked to the student and the invoice/intake it settles.  | Amount is integer minor units; unique `(bankName, bankReference)` for bank deposits.   |
+| `Receipt`             | Numbered evidence of a recorded payment.                                 | Unique receipt number; preserve and mark `VOID` when the associated payment is voided. |
+| `OutstandingBalance`  | Tracks or projects an unpaid amount.                                     | Must reconcile to the authoritative invoice and payment ledger.                        |
+| `CarryForwardBalance` | Tracks an amount carried between billing periods.                        | Derivation and reconciliation rules must be explicit and auditable.                    |
+| `TransactionLog`      | Append-only financial ledger/reversal record.                            | No update/delete; write with the associated payment transaction.                       |
 
 The active payment flow is a physical bank deposit recorded by Finance. A
 payment records its amount, currency, bank name/reference, deposit date,
@@ -203,10 +305,35 @@ changes, result publication, and eligibility overrides.
 - `User` relates to `Role` through `UserRole`; `Role` relates to `Permission`
   through `RolePermission`.
 - `Student` and `Lecturer` each relate one-to-one to `User`.
-- `Term` belongs to an `AcademicYear`; course offerings connect catalog courses
-  to a term and class context.
-- `CourseRegistration` links a student to a course offering. Enrollment,
-  registration, admission, and attendance history must remain queryable.
+- `Faculty` contains `Department`, which contains `Programme`. `Intake` belongs
+  to an `AcademicYear`; `Department` owns `CourseUnit`.
+- `ProgrammeCourseUnit` places course units in a programme curriculum by study
+  year and intake slot. `ProgrammeElectiveRule` records elective-credit bounds.
+- `CourseUnitFacultyEligibility` limits general course units to eligible
+  faculties unless the unit is open to all faculties.
+- `CourseUnitPrerequisite` records directed prerequisite relationships.
+- `CourseUnitOffering` connects one course unit to one intake and is shared
+  across programmes; its delivery mode is independent of the student's
+  schedule.
+- `ProgrammeEnrollment` preserves each programme enrollment record and points
+  to the admission intake; schedule changes are logged through `AuditLog`.
+- `IntakeRegistration` links a student to one intake; `UnitRegistration` links
+  a student to one shared offering and records its intake.
+- `Application` records the desired programme/intake, source, study mode, and
+  schedule; `AdmissionRecord` uniquely preserves the resulting decision and
+  links it to the student, programme, and admission intake.
+- `ApplicationDocument` stores only object-storage metadata and review fields.
+  `ApplicationFeeRecord` stores integer minor units and a unique bank reference;
+  its void history must remain queryable.
+- `TimetableSlot` and `ClassSession` belong to a shared course-unit offering.
+  Session logs and attendance outcomes link to both `ClassSession` and `Student`;
+  attendance is unique for each pair.
+- Announcements and calendar events retain their creator and audience selectors.
+  Audience targets are polymorphic and are validated by type in the service;
+  intake dates and class sessions are derived into the calendar, not copied into
+  `CalendarEvent`.
+- Enrollment, registration, admission, and attendance history must remain
+  queryable.
 - Finance records link to the student and the academic billing context. Payment
   references and receipts are unique and auditable.
 - LMS submissions and exam attempts link the authenticated student to the
@@ -223,13 +350,25 @@ At minimum, review and add indexes/constraints for:
 
 - Login email, role name, permission key, and the composite RBAC join keys.
 - Session/token hashes, user foreign keys, and expiry/active-session lookups.
-- Unique `Student.userId` and `Lecturer.userId`.
+- Unique `Student.userId`, student number, optional national ID, `Lecturer.userId`,
+  and staff number.
 - Student/offering registration pairs and foreign keys used for ownership
   filtering.
+- Unique student/intake and offering/lecturer assignment pairs; indexes for
+  programme enrollment history and intake/offering class lists.
+- Application external references, application status/queue fields,
+  application-document review fields, admission application links, and
+  application-fee `(bankName, bankReference)` plus actor/date lookups.
+- Session/offering/time lookups, session/student attendance uniqueness,
+  presence-interval joins, and immutable Attend-click history.
+- Announcement publication-window, audience-target, and calendar-event
+  date-range lookups.
+- Course-unit curriculum placement, faculty eligibility, prerequisite, and
+  shared offering keys and lookup indexes.
 - Payment `(bankName, bankReference)`, payment-reference number, and receipt
   number.
 - Feature-flag key and audit lookup by key, actor, and creation time.
-- Frequently scoped records by student, course offering, term, status, and
+- Frequently scoped records by student, course-unit offering, intake, status, and
   created/updated time, based on measured query patterns.
 
 Confirm all unique keys against real workflows before migration, especially
@@ -253,14 +392,25 @@ and payment allocation.
 ## Decisions still required
 
 - Institution/tenant boundaries and whether an `Institution` model is needed.
-- Final academic-year, term, program, course, offering, enrollment, and retake
-  cardinalities.
+- Remaining course-unit selection, enrollment, and retake cardinalities.
 - How payment allocations work when a payment covers multiple invoices or
   billing periods.
 - Currency support and the relationship between currency codes and minor-unit
   scales.
 - A transaction-safe strategy for sequential, gap-free receipt numbers.
-- Final academic workflow status enums, attendance uniqueness, and
-  archival/deletion policies.
+- Service-level status transitions, attendance uniqueness, and
+  archival/deletion policies for implemented records.
 - Retention and redaction policy for IP addresses, authentication metadata,
   and audit records.
+
+## Codebase alignment notes (2026-11-22)
+
+- **Migration application state:** migration files are versioned, but their
+  applied state cannot be determined from the schema repository alone; verify
+  against each target database before claiming they are pending or applied.
+- **Academic model catalog:** Faculty, Department, Programme, AcademicYear,
+  Intake, course units, curriculum placement, prerequisites, eligibility,
+  shared offerings, student/lecturer profiles, enrollment/selection records,
+  admissions, sessions, attendance, announcements, and calendar events are
+  implemented in Prisma. Academic-structure services are implemented; other
+  domain service and API workflows remain planned.

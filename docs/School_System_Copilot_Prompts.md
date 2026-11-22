@@ -254,7 +254,7 @@ Roles (key: job):
 - admin: system administrator (accounts, roles, settings, feature flags, audit
   log); NO access to grades, money or admissions decisions
 - admissions_officer: enter applications, review documents
-- admissions_head: admit, reject, approve study mode changes
+- admissions_head: admit, reject, approve study-mode and student-schedule changes
 - registrar: programmes, intakes, course units, curriculum, offerings, student
   records, publish results
 - bursar (Finance Officer): record bank deposits, issue receipts, confirm
@@ -720,7 +720,7 @@ Base everything on the actual code in #codebase. Do not modify source code.
 >
 > **Domain model (use these words everywhere):** Application → Admission → Student. Faculty → Department → Programme (e.g. BSc Computer Science) → curriculum of **Course Units** → **Course Unit Offering** (one per unit per **intake**, with lecturer(s)) → class sessions → attendance.
 > **Intakes:** three per academic year (default January, May, September; configuration). Never use "term" or "semester".
-> **Students never sign themselves up.** Applicants apply through the university website (a separate site) or the admission office; admins review documents, confirm the application fee, admit them with a **study mode (ONLINE or PHYSICAL)**, and the system emails default login details. The programme's course units load automatically; the student selects them on the **Course Units** page.
+> **Students never sign themselves up.** Applicants apply through the university website (a separate site) or the admission office; admins review documents, confirm the application fee, admit them with a **study mode (ONLINE or PHYSICAL)** and a **student schedule (DAY, EVENING, WEEKEND, or DISTANCE)**, and the system emails default login details. Each shared offering independently specifies delivery as PHYSICAL, ONLINE, or HYBRID. The programme's course units load automatically; the student selects them on the **Course Units** page.
 > **Online attendance:** a student is PRESENT only if their longest **continuous** time in the lecture (reconnects up to a short grace merged) reaches the minimum share of the session; on-and-off time is never added up.
 
 ### 2.0 Domain Docs & Instructions
@@ -738,8 +738,9 @@ Update our docs for the academic domain model. Do not write code.
    - Core, elective, retake and general (shared) course units
    - One offering per unit per intake; students from any eligible programme share it
    - Admissions: apply (website or office) > document review > application fee
-     confirmed > admit (with study mode) > default login emailed > units auto-loaded
-   - Study mode ONLINE or PHYSICAL and what each student sees
+     confirmed > admit (with study mode and student schedule) > default login emailed > units auto-loaded
+   - Student schedule DAY, EVENING, WEEKEND, or DISTANCE, separate from each
+     offering's PHYSICAL, ONLINE, or HYBRID delivery
    - The continuous-time online attendance rule and its configurable numbers
 2. Propose additions to .github/copilot-instructions.md: terminology (intake,
    programme, course unit), "no public sign-up", and the attendance rule.
@@ -790,7 +791,8 @@ Models:
 - ProgrammeElectiveRule (programmeId, studyYear, intakeSlot, minCredits,
   maxCredits)
 - CourseUnitPrerequisite (courseUnitId, prerequisiteId)
-- CourseUnitOffering (courseUnitId, intakeId, capacity nullable, status);
+- CourseUnitOffering (courseUnitId, intakeId, capacity nullable, status,
+  deliveryMode PHYSICAL | ONLINE | HYBRID);
   UNIQUE (courseUnitId, intakeId): ONE offering per unit per intake, shared
   by all programmes
 
@@ -806,19 +808,30 @@ Add indexes, enums, timestamps and /// comments. Do NOT generate APIs.
 Add Prisma models for students, lecturers and course unit selection.
 
 Models:
-- Student (userId one-to-one, studentNumber unique, personal details)
+- Student (userId one-to-one, studentNumber unique, phone String?,
+  dateOfBirth DateTime? @db.Date, gender String?, nationality String?,
+  nationalId String? unique, address String?, nextOfKinName String?,
+  nextOfKinPhone String?, nextOfKinRelationship String?,
+  schedule enum DAY | EVENING | WEEKEND | DISTANCE)
 - Lecturer (userId one-to-one, departmentId, staffNumber unique)
 - OfferingLecturer (offeringId, lecturerId, role enum PRIMARY | ASSISTANT)
 - ProgrammeEnrollment (studentId, programmeId, admissionIntakeId,
-  studyMode enum ONLINE | PHYSICAL, currentStudyYear, currentIntakeSlot,
-  status ACTIVE | DEFERRED | COMPLETED | WITHDRAWN); history preserved,
-  no destructive updates; study mode changes logged
-- IntakeRegistration (studentId, intakeId, status); unique (studentId, intakeId)
+  currentStudyYear, currentIntakeSlot 1..3, status enum ACTIVE | DEFERRED |
+  COMPLETED | WITHDRAWN); history preserved, no destructive updates
+- IntakeRegistration (studentId, intakeId, status enum PENDING | REGISTERED |
+  DEFERRED | WITHDRAWN | SUSPENDED | COMPLETED); unique (studentId, intakeId)
 - UnitRegistration (studentId, offeringId, intakeId, status SELECTED | DROPPED |
   COMPLETED, isRetake, selectedAt); unique (studentId, offeringId)
 
+Student schedule is independent of CourseUnitOffering.deliveryMode
+(PHYSICAL | ONLINE | HYBRID). Do not put programmeId or admissionYear on
+Student; programme and admission intake belong to ProgrammeEnrollment.
+Record student-schedule and offering-delivery changes in the existing AuditLog.
+Keep ProgrammeEnrollment history and do not destructively update or delete it.
+
 Add indexes, enums, timestamps and /// comments. Do NOT generate APIs.
-Do not modify auth models.
+Do not change auth data or behavior; add only inverse Student/Lecturer relation
+fields on User as required for Prisma one-to-one relations.
 ```
 
 ### 2.4 Admissions Schema
@@ -832,18 +845,21 @@ Add Prisma models for admissions.
 Models:
 - Application (applicant name, email, phone, dateOfBirth, nationality,
   desiredProgrammeId, desiredIntakeId, studyMode ONLINE | PHYSICAL,
-  source WEBSITE | ADMISSION_OFFICE, externalRef nullable unique (the website's
-  application id), status enum SUBMITTED | UNDER_REVIEW | DOCS_APPROVED |
+  schedule DAY | EVENING | WEEKEND | DISTANCE, source WEBSITE | ADMISSION_OFFICE,
+  externalRef nullable unique (the website's application id), status enum SUBMITTED |
+  UNDER_REVIEW | DOCS_APPROVED |
   DOCS_REJECTED | FEE_CONFIRMED | ADMITTED | REJECTED | WITHDRAWN,
-  enteredById nullable, admittedById, admittedAt, studentId nullable)
+  enteredById nullable, admittedById nullable, admittedAt nullable,
+  studentId nullable)
 - ApplicationDocument (applicationId, type enum ID | TRANSCRIPT | CERTIFICATE |
   PHOTO | OTHER, storageKey, status PENDING | APPROVED | REJECTED,
-  reviewerNote, reviewedById, reviewedAt)
-- ApplicationFeeRecord (applicationId, amountMinor Int, currency, bankName,
-  bankReference, depositDate, recordedById, status RECORDED | VOIDED, void
-  fields); unique (bankName, bankReference)
+  reviewerNote nullable, reviewedById nullable, reviewedAt nullable)
+- ApplicationFeeRecord (applicationId, amountMinor Int, currency ISO 4217
+  three-letter code, bankName, bankReference, depositDate, recordedById,
+  status RECORDED | VOIDED, voidedAt nullable, voidedById nullable,
+  voidReason nullable and required when voided); unique (bankName, bankReference)
 - AdmissionRecord (applicationId unique, studentId, programmeId,
-  admissionIntakeId, studyMode, admittedById, admittedAt)
+  admissionIntakeId, studyMode, schedule, admittedById, admittedAt)
 
 Add indexes, enums, timestamps and /// comments. Do NOT generate APIs.
 ```
@@ -857,22 +873,31 @@ Add indexes, enums, timestamps and /// comments. Do NOT generate APIs.
 Add Prisma models for class sessions and attendance.
 
 Models:
-- TimetableSlot (offeringId, dayOfWeek, startTime, endTime, room nullable,
-  deliveryMode PHYSICAL | ONLINE | HYBRID, defaultMeetingUrl nullable)
+- TimetableSlot (offeringId, dayOfWeek enum MONDAY | TUESDAY | WEDNESDAY |
+  THURSDAY | FRIDAY | SATURDAY | SUNDAY, startTime and endTime as local SQL
+  TIME values, room nullable, deliveryMode PHYSICAL | ONLINE | HYBRID,
+  defaultMeetingUrl nullable)
 - ClassSession (offeringId, slotId nullable, startsAt, endsAt, deliveryMode,
-  room nullable, meetingUrl nullable, meetingProvider nullable,
+  room nullable, meetingUrl nullable, meetingProvider nullable String
+  (provider key; do not define provider values before selection),
   externalMeetingId nullable, status SCHEDULED | HELD | CANCELLED)
 - SessionJoin (sessionId, studentId, clickedAt): log of Attend clicks
 - PresenceInterval (sessionId, studentId, joinedAt, leftAt, source
   PROVIDER_WEBHOOK | REPORT_IMPORT | MANUAL)
 - AttendanceRecord (sessionId, studentId, status PRESENT | ABSENT,
   method ONLINE_PRESENCE | LECTURER_MARKED, longestContinuousSeconds,
-  totalSeconds, computedAt, overriddenById, overrideReason);
+  totalSeconds, computedAt, overriddenById nullable, overrideReason nullable);
   unique (sessionId, studentId)
-- AttendanceRule (minContinuousPercent default 75, reconnectGraceSeconds
-  default 180, minAttendancePercentWarning default 75)
+- AttendanceRule (global singleton id=1; minContinuousPercent default 75,
+  reconnectGraceSeconds default 180, minAttendancePercentWarning default 75)
 
-Add indexes, enums, timestamps and /// comments. Do NOT generate APIs.
+The AttendanceRule applies to all sessions. Merge reconnect gaps only within
+reconnectGraceSeconds; mark PRESENT online only when the longest continuous
+interval reaches minContinuousPercent of the session. Never add interrupted
+intervals together. Meeting URLs must not appear in list or detail responses.
+
+Add indexes, enums, timestamps, sensible onDelete behavior and /// comments.
+Do NOT generate APIs.
 ```
 
 ### 2.6 Announcements & Calendar Schema
@@ -911,7 +936,9 @@ Do NOT generate APIs.
    seed, exactly as the matrix defines them:
    admissions:application:manage, admissions:document:review (admissions_officer
    and admissions_head); admissions:admit, admissions:reject,
-   admissions:study-mode:change (admissions_head); admissions:fee:confirm
+   admissions:study-mode:change (study-mode and student-schedule changes;
+   admissions_head);
+   admissions:fee:confirm
    (bursar); academic:structure:manage, academic:curriculum:manage,
    academic:offering:manage, academic:offering:assign-lecturer,
    academic:session:manage (registrar; lecturer OWN for sessions);
@@ -988,12 +1015,14 @@ required documents are approved the application becomes DOCS_APPROVED.
 ApplicationFeeService: record the fee (bank, reference, amount, date), reject a
 duplicate (bank, reference); FEE_CONFIRMED when the amount meets the configured
 application fee; void with reason (never delete).
-AdmissionService.admit(applicationId, adminId, studyMode): allowed ONLY if
+AdmissionService.admit(applicationId, adminId, studyMode, schedule): allowed ONLY if
 documents are approved AND the fee is confirmed, otherwise a typed error. The
 admitting user (admissions:admit) must differ from the user who approved the
 documents. In one
 transaction: create the User (student role, via AdminUsersService), Student,
-AdmissionRecord, ProgrammeEnrollment (with studyMode) and IntakeRegistration.
+AdmissionRecord (including study mode and schedule), ProgrammeEnrollment and
+IntakeRegistration. Store the student's schedule on Student, not
+ProgrammeEnrollment; keep study mode on Application and AdmissionRecord.
 Send the credentials email AFTER the commit; an email failure must not undo the
 admission (record it and allow resend). The programme's course units for the
 student's first study year and intake slot then appear as prompted units.
@@ -1013,7 +1042,8 @@ Create StudentsService, ProgrammeEnrollmentService and LecturersService.
 Features:
 - Student CRUD (soft delete), search, pagination, unique student numbers
 - Enrollment history preserved; defer, withdraw, complete
-- Study mode change (admin only, written reason, audit log)
+- Study-mode and student-schedule changes are approved by admissions_head and
+  recorded in AuditLog; offering delivery-mode changes are also audited.
 - Progression: advance currentStudyYear and currentIntakeSlot after an intake
   completes
 - Lecturer profiles linked to a department
@@ -1058,7 +1088,7 @@ double-book); a student's weekly schedule.
 SessionService: set a meeting link per session (https only, host allow-list from
 config), cancel, reschedule.
 AttendService.attend(studentId, sessionId): student must have selected the
-offering; study mode must be ONLINE (physical students get a clear message);
+offering; the offering deliveryMode must be ONLINE or HYBRID;
 the session must have a link and be within [start minus 10 minutes, end];
 log a SessionJoin; return { meetingUrl } using MeetingProvider.getJoinUrl.
 
@@ -1112,7 +1142,7 @@ getEvents(userId, from, to, max 62 days) merges calendar events by audience,
 intake milestones, class sessions of the user's selected or taught offerings,
 and events from registered providers (assignments in Phase 4, exams in Phase 5).
 HomeService: getStudentHome, getLecturerHome, getRegistrarHome in ONE call each.
-Student: profile summary (name, photo, programme, intake, study mode), up to 5
+Student: profile summary (name, photo, programme, intake, schedule), up to 5
 announcements, current-month events, selected course units each with next
 session { startsAt, deliveryMode, canAttend } (no meeting URL), attendance
 summary (overall, per unit, below-minimum flag). Cache per user in Redis for
@@ -1132,7 +1162,7 @@ Apply @Roles/@Permissions exactly per RBAC_MATRIX.md:
 - Admin: staff users only (the Phase 1 endpoints); no admissions, academic or
   finance endpoints
 - Admissions officer: applications and document review; admissions head: admit,
-  reject, study mode change
+  reject, student schedule change
 - Bursar: confirm application fees (void authority arrives with finance_manager
   in Phase 3)
 - Registrar: structure, curriculum, offerings, lecturers, sessions,
@@ -1189,7 +1219,7 @@ Create the shared app shell in apps/web (no page content yet).
   Curriculum, Offerings & Lecturers, Class Sessions, Students, Announcements, Calendar
   Admin: Home, Users (Feature Flags arrive in Phase 3, Audit Log in Phase 7)
   Admissions officer: Home, Applications
-  Admissions head: Home, Applications (with Admit), Study Mode Changes
+  Admissions head: Home, Applications (with Admit), Study Mode & Student Schedule Changes
   Bursar: Application Fees (Home arrives in Phase 3)
 - Update the EXISTING login flow to redirect by role to /student, /lecturer,
   /finance, /registrar, /admissions, /admin; wrong-role routes show a 403 page
@@ -1295,7 +1325,7 @@ Comment every component and major JSX section.
 Create lecturer pages in apps/web:
 - /lecturer/units: my offerings per intake
 - /lecturer/units/[offeringId]: class list showing each student's programme and
-  study mode (shared units mix programmes)
+  schedule (shared units mix programmes)
 - /lecturer/sessions: create and edit sessions, paste the meeting link
   (validate https), mark HELD or CANCELLED
 - Attendance review per session: each student's longest continuous time and
@@ -1324,7 +1354,7 @@ Create registrar pages in apps/web:
 - Offerings per intake: bulk-create from the curriculum, assign lecturer(s),
   capacity, selected counts
 - Class sessions: generate from the timetable, edit, cancel
-- Student list (search, filter, pagination) and detail incl. study mode history
+- Student list (search, filter, pagination) and detail incl. schedule history
 - Announcements and calendar event management with audience pickers
 
 Use shadcn/ui data tables and TanStack Query. Guard routes by role.
@@ -1346,8 +1376,9 @@ Create admin pages in apps/web:
   required note (viewed through signed URLs); an application fee card with a
   "Record fee" form (bank, reference, amount, date) and a clear duplicate error;
   a progress stepper: Submitted, Documents approved, Fee confirmed, Admitted
-- "Admit" dialog: confirm programme and intake, choose the study mode (Online or
-  Physical), and show what will happen (account created, login emailed, course
+- "Admit" dialog: confirm programme and intake, choose the study mode (Online
+  or Physical) and the student's schedule (Day, Evening, Weekend, or Distance),
+  and show what will happen (account created, login emailed, course
   units loaded). The button is disabled until documents are approved and the fee
   is confirmed, and shows the reasons
 - After admission: a success state and a "Resend login details" action
@@ -1357,7 +1388,8 @@ Create admin pages in apps/web:
   (uses the user-management API from Phase 1 update 1.13)
 
 Use shadcn/ui and TanStack Query. Guard by permission: officers see applications
-and document review; only the admissions head sees Admit and Study Mode Changes;
+and document review; only the admissions head sees Admit and Study Mode &
+Student Schedule Changes;
 only the bursar sees fee recording; only admin sees /admin/users.
 Do not modify backend code.
 
@@ -1382,7 +1414,8 @@ Then:
 1. Append one entry per step to docs/DEVELOPMENT_LOG.md (newest first).
 2. List decisions that deserve an ADR and draft them in docs/adr/ (intakes
    replace terms; shared offerings and general units; admissions gating; no
-   public sign-up and temporary credentials; study mode; continuous-time
+   public sign-up and temporary credentials; student schedule and offering
+   delivery mode; continuous-time
    attendance; meeting provider choice).
 3. List out-of-date sections in docs/DATABASE_SCHEMA.md and docs/RBAC_MATRIX.md.
 Include the domain model, the intake calendar, the admissions flow, and a worked
@@ -1468,7 +1501,8 @@ Create FeeStructureService, controller, and DTOs in apps/api/src/finance.
 
 Features:
 - Create and update fee structures
-- Assign fees per programme and intake (and per study mode, ONLINE or PHYSICAL, if fees differ)
+- Assign fees per programme and intake (and per student schedule, DAY, EVENING,
+  WEEKEND, or DISTANCE, if fees differ)
 - Validate academic year and intake relationships
 - Prevent editing a structure once invoices exist (create a new version instead)
 

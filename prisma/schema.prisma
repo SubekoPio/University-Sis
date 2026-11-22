@@ -1,3 +1,4 @@
+// Purpose: Define University SIS data models, enums, and relational constraints.
 generator client {
   provider = "prisma-client-js"
 }
@@ -22,52 +23,461 @@ enum UserStatus {
   DEACTIVATED
 }
 
+/// Qualification level awarded by a programme.
+enum AwardLevel {
+  /// Short vocational or professional qualification.
+  CERTIFICATE
+
+  /// Intermediate vocational or professional qualification.
+  DIPLOMA
+
+  /// Undergraduate bachelor's qualification.
+  BACHELOR
+
+  /// Postgraduate diploma qualification.
+  POSTGRADUATE_DIPLOMA
+
+  /// Postgraduate master's qualification.
+  MASTERS
+
+  /// Doctoral qualification.
+  DOCTORATE
+}
+
+/// Lifecycle state of an academic intake.
+enum IntakeStatus {
+  /// Intake has not reached its selection or study period.
+  UPCOMING
+
+  /// Eligible students may select course units for this intake.
+  SELECTION_OPEN
+
+  /// Teaching and academic activity for this intake is in progress.
+  ACTIVE
+
+  /// The intake is complete and no longer active.
+  CLOSED
+}
+
+/// Academic level of a course unit.
+enum CourseUnitLevel {
+  /// First-year undergraduate level.
+  LEVEL_100
+
+  /// Second-year undergraduate level.
+  LEVEL_200
+
+  /// Third-year undergraduate level.
+  LEVEL_300
+
+  /// Fourth-year undergraduate level.
+  LEVEL_400
+}
+
+/// Lifecycle state of a course unit.
+enum CourseUnitStatus {
+  /// Course unit is available for curriculum placement.
+  ACTIVE
+
+  /// Course unit is temporarily unavailable for new curriculum placement.
+  INACTIVE
+
+  /// Course unit has been retired from active use.
+  RETIRED
+}
+
+/// Requirement category for a course unit in a programme curriculum.
+enum ProgrammeCourseUnitType {
+  /// Course unit is required by the programme.
+  CORE
+
+  /// Course unit is an optional programme choice.
+  ELECTIVE
+}
+
+/// Lifecycle state of a course-unit offering.
+enum CourseUnitOfferingStatus {
+  /// Offering is configured but not yet available to students.
+  PLANNED
+
+  /// Offering is available for student selection.
+  OPEN
+
+  /// Offering is no longer available for selection.
+  CLOSED
+
+  /// Offering will not run for this intake.
+  CANCELLED
+}
+
+/// Student's regular attendance schedule, separate from offering delivery.
+enum StudentSchedule {
+  /// Classes are scheduled on weekdays during the day.
+  DAY
+
+  /// Classes are scheduled on weekdays in the evening.
+  EVENING
+
+  /// Classes are scheduled primarily on weekends.
+  WEEKEND
+
+  /// The student follows a distance or open-learning schedule.
+  DISTANCE
+}
+
+/// Delivery format of a course-unit offering.
+enum DeliveryMode {
+  /// Teaching is delivered in a physical venue.
+  PHYSICAL
+
+  /// Teaching is delivered online.
+  ONLINE
+
+  /// Teaching combines online and physical delivery.
+  HYBRID
+}
+
+/// Assignment type for a lecturer on a course-unit offering.
+enum OfferingLecturerRole {
+  /// Lecturer responsible for the offering.
+  PRIMARY
+
+  /// Lecturer assisting with the offering.
+  ASSISTANT
+}
+
+/// Lifecycle state of a student's programme enrollment.
+enum ProgrammeEnrollmentStatus {
+  /// Student is actively progressing in the programme.
+  ACTIVE
+
+  /// Student's programme enrollment is temporarily deferred.
+  DEFERRED
+
+  /// Student has completed the programme enrollment.
+  COMPLETED
+
+  /// Student has withdrawn from the programme enrollment.
+  WITHDRAWN
+}
+
+/// Lifecycle state of a student's intake registration.
+enum IntakeRegistrationStatus {
+  /// Registration has started but is awaiting clearance.
+  PENDING
+
+  /// Student is cleared and registered for the intake.
+  REGISTERED
+
+  /// Student's intake registration is deferred.
+  DEFERRED
+
+  /// Student has withdrawn from the intake.
+  WITHDRAWN
+
+  /// Student is suspended from the intake.
+  SUSPENDED
+
+  /// Student has completed the intake.
+  COMPLETED
+}
+
+/// Lifecycle state of a student's course-unit registration.
+enum UnitRegistrationStatus {
+  /// Student is currently selected into the offering.
+  SELECTED
+
+  /// Student has dropped the offering.
+  DROPPED
+
+  /// Student has completed the course unit.
+  COMPLETED
+}
+
+/// Study mode requested by an applicant and confirmed at admission.
+enum StudyMode {
+  /// Applicant requests online study, independent of offering delivery.
+  ONLINE
+
+  /// Applicant requests physical study, independent of offering delivery.
+  PHYSICAL
+}
+
+/// Channel through which an application was submitted.
+enum ApplicationSource {
+  /// Application was received from the university website.
+  WEBSITE
+
+  /// Application was entered by staff at the admission office.
+  ADMISSION_OFFICE
+}
+
+/// Lifecycle state of an admissions application.
+enum ApplicationStatus {
+  /// Application has been received and is awaiting review.
+  SUBMITTED
+
+  /// Application is currently under document review.
+  UNDER_REVIEW
+
+  /// Required application documents have been approved.
+  DOCS_APPROVED
+
+  /// One or more required application documents were rejected.
+  DOCS_REJECTED
+
+  /// The application fee has been confirmed.
+  FEE_CONFIRMED
+
+  /// The applicant has been admitted.
+  ADMITTED
+
+  /// The applicant has been rejected.
+  REJECTED
+
+  /// The applicant withdrew the application.
+  WITHDRAWN
+}
+
+/// Category of document submitted with an application.
+enum ApplicationDocumentType {
+  /// Government-issued identity document.
+  ID
+
+  /// Academic transcript.
+  TRANSCRIPT
+
+  /// Academic or professional certificate.
+  CERTIFICATE
+
+  /// Applicant photograph.
+  PHOTO
+
+  /// Other supporting document.
+  OTHER
+}
+
+/// Review state of an application document.
+enum ApplicationDocumentStatus {
+  /// Document has not yet been reviewed.
+  PENDING
+
+  /// Document has been approved.
+  APPROVED
+
+  /// Document has been rejected.
+  REJECTED
+}
+
+/// Recording state of an application fee deposit.
+enum ApplicationFeeStatus {
+  /// Deposit record is active and has not been voided.
+  RECORDED
+
+  /// Deposit record has been voided with an explanation.
+  VOIDED
+}
+
+/// Day of the week for a recurring timetable slot.
+enum DayOfWeek {
+  /// Monday.
+  MONDAY
+
+  /// Tuesday.
+  TUESDAY
+
+  /// Wednesday.
+  WEDNESDAY
+
+  /// Thursday.
+  THURSDAY
+
+  /// Friday.
+  FRIDAY
+
+  /// Saturday.
+  SATURDAY
+
+  /// Sunday.
+  SUNDAY
+}
+
+/// Lifecycle state of a scheduled class session.
+enum ClassSessionStatus {
+  /// Session is planned and has not yet been held or cancelled.
+  SCHEDULED
+
+  /// Session has taken place.
+  HELD
+
+  /// Session was cancelled and will not take place.
+  CANCELLED
+}
+
+/// Source of a student's online-presence interval.
+enum PresenceIntervalSource {
+  /// Presence was received from a meeting-provider webhook.
+  PROVIDER_WEBHOOK
+
+  /// Presence was imported from a meeting attendance report.
+  REPORT_IMPORT
+
+  /// Presence was entered manually by an authorized user.
+  MANUAL
+}
+
+/// Attendance outcome for a student in one class session.
+enum AttendanceStatus {
+  /// Student met the attendance requirement or was marked present.
+  PRESENT
+
+  /// Student did not meet the attendance requirement or was marked absent.
+  ABSENT
+}
+
+/// Method used to establish a student's attendance outcome.
+enum AttendanceMethod {
+  /// Attendance was computed from online presence intervals.
+  ONLINE_PRESENCE
+
+  /// Attendance was marked by a lecturer.
+  LECTURER_MARKED
+}
+
+/// Category used to classify an announcement.
+enum AnnouncementCategory {
+  /// General institutional information.
+  GENERAL
+
+  /// Academic notices and updates.
+  ACADEMIC
+
+  /// Finance-related notices.
+  FINANCE
+
+  /// Examination notices.
+  EXAM
+
+  /// Event announcements.
+  EVENT
+}
+
+/// Publication lifecycle state of an announcement.
+enum AnnouncementStatus {
+  /// Announcement is being prepared and is not visible to its audience.
+  DRAFT
+
+  /// Announcement is available according to its publication window.
+  PUBLISHED
+
+  /// Announcement is no longer active.
+  ARCHIVED
+}
+
+/// Audience selector shared by announcements and calendar events.
+enum CommunicationAudienceType {
+  /// Every student account.
+  ALL_STUDENTS
+
+  /// Every lecturer account.
+  ALL_LECTURERS
+
+  /// Users assigned the role identified by targetId.
+  ROLE
+
+  /// Students or staff in the faculty identified by targetId.
+  FACULTY
+
+  /// Students in the programme identified by targetId.
+  PROGRAMME
+
+  /// Students registered for the intake identified by targetId.
+  INTAKE
+
+  /// Students eligible for the course-unit offering identified by targetId.
+  COURSE_UNIT_OFFERING
+}
+
+/// Classification of a calendar event.
+enum CalendarEventType {
+  /// Public or institutional holiday.
+  HOLIDAY
+
+  /// Academic calendar event.
+  ACADEMIC
+
+  /// General institutional event.
+  EVENT
+}
+
 /// An account identity used to authenticate and authorize access to the SIS.
 model User {
   /// Stable UUID identifying the account.
-  id                         String                   @id @default(uuid()) @db.Uuid
+  id                           String                   @id @default(uuid()) @db.Uuid
   /// Normalized login email address, unique across all accounts.
-  email                      String                   @unique
+  email                        String                   @unique
   /// Display name; nullable to preserve existing accounts without known names.
-  name                       String?
+  name                         String?
   /// Password verifier; plaintext passwords must never be stored.
-  passwordHash               String
+  passwordHash                 String
   /// Current account lifecycle state.
-  status                     UserStatus               @default(ACTIVE)
+  status                       UserStatus               @default(ACTIVE)
   /// Require the account holder to choose a new password at their next login.
-  mustChangePassword         Boolean                  @default(false)
+  mustChangePassword           Boolean                  @default(false)
   /// Expiration time for an administrator-issued temporary password.
-  temporaryPasswordExpiresAt DateTime?
+  temporaryPasswordExpiresAt   DateTime?
   /// User account that created this account, when known.
-  createdById                String?                  @db.Uuid
+  createdById                  String?                  @db.Uuid
   /// Administrator who created this account.
-  createdBy                  User?                    @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy                    User?                    @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   /// Accounts created by this user.
-  createdUsers               User[]                   @relation("UserCreatedBy")
+  createdUsers                 User[]                   @relation("UserCreatedBy")
   /// Time the account was deactivated, if applicable.
-  deactivatedAt              DateTime?
+  deactivatedAt                DateTime?
   /// User account that deactivated this account, when known.
-  deactivatedById            String?                  @db.Uuid
+  deactivatedById              String?                  @db.Uuid
   /// User account responsible for the deactivation.
-  deactivatedBy              User?                    @relation("UserDeactivatedBy", fields: [deactivatedById], references: [id], onDelete: SetNull)
+  deactivatedBy                User?                    @relation("UserDeactivatedBy", fields: [deactivatedById], references: [id], onDelete: SetNull)
   /// Accounts deactivated by this user.
-  deactivatedUsers           User[]                   @relation("UserDeactivatedBy")
+  deactivatedUsers             User[]                   @relation("UserDeactivatedBy")
   /// Audit records attributed to this user.
-  auditEntries               AuditLog[]               @relation("AuditActor")
+  auditEntries                 AuditLog[]               @relation("AuditActor")
   /// Whether the account's email address has been verified.
-  emailVerified              Boolean                  @default(false)
+  emailVerified                Boolean                  @default(false)
   /// Roles assigned to this account.
-  roles                      UserRole[]
+  roles                        UserRole[]
   /// Active and historical authentication sessions for this account.
-  sessions                   Session[]
+  sessions                     Session[]
   /// Password recovery tokens issued to this account.
-  passwordResetTokens        PasswordResetToken[]
+  passwordResetTokens          PasswordResetToken[]
   /// Email verification tokens issued to this account.
-  emailVerificationTokens    EmailVerificationToken[]
+  emailVerificationTokens      EmailVerificationToken[]
+  /// Student academic profile linked to this account, when applicable.
+  studentProfile               Student?
+  /// Lecturer academic profile linked to this account, when applicable.
+  lecturerProfile              Lecturer?
+  /// Applications entered by this user.
+  applicationsEntered          Application[]            @relation("ApplicationEnteredBy")
+  /// Applications admitted by this user.
+  applicationsAdmitted         Application[]            @relation("ApplicationAdmittedBy")
+  /// Application documents reviewed by this user.
+  applicationDocumentsReviewed ApplicationDocument[]    @relation("ApplicationDocumentReviewer")
+  /// Application fee deposits recorded by this user.
+  applicationFeesRecorded      ApplicationFeeRecord[]   @relation("ApplicationFeeRecorder")
+  /// Application fee deposits voided by this user.
+  applicationFeesVoided        ApplicationFeeRecord[]   @relation("ApplicationFeeVoider")
+  /// Admission records created by this user.
+  admissionRecordsCreated      AdmissionRecord[]        @relation("AdmissionRecordAdmitter")
+  /// Attendance records overridden by this user.
+  attendanceOverrides          AttendanceRecord[]       @relation("AttendanceRecordOverrideActor")
+  /// Announcements authored by this user.
+  announcementsCreated         Announcement[]           @relation("AnnouncementCreator")
+  /// Calendar events authored by this user.
+  calendarEventsCreated        CalendarEvent[]          @relation("CalendarEventCreator")
   /// Time the account was created.
-  createdAt                  DateTime                 @default(now())
+  createdAt                    DateTime                 @default(now())
   /// Time the account was most recently updated.
-  updatedAt                  DateTime                 @updatedAt
+  updatedAt                    DateTime                 @updatedAt
 
   /// Support lookup of expired temporary passwords.
   @@index([temporaryPasswordExpiresAt])
@@ -261,4 +671,1058 @@ model EmailVerificationToken {
   @@index([expiresAt])
   /// Support listing a user's tokens by expiry.
   @@index([userId, expiresAt])
+}
+
+/// A top-level academic organization that contains departments.
+model Faculty {
+  /// Stable UUID identifying the faculty.
+  id                      String                         @id @default(uuid()) @db.Uuid
+  /// Unique institutional code for the faculty.
+  code                    String                         @unique
+  /// Display name of the faculty.
+  name                    String
+  /// Departments administratively contained by this faculty.
+  departments             Department[]
+  /// Course-unit eligibility rules that include this faculty.
+  courseUnitEligibilities CourseUnitFacultyEligibility[]
+  /// Time the faculty was created.
+  createdAt               DateTime                       @default(now())
+  /// Time the faculty was most recently updated.
+  updatedAt               DateTime                       @updatedAt
+  /// Time the faculty was soft-deleted when academic history references it.
+  deletedAt               DateTime?
+
+  /// Support filtering active faculties.
+  @@index([deletedAt])
+}
+
+/// An academic organization within a faculty that contains programmes.
+model Department {
+  /// Stable UUID identifying the department.
+  id          String       @id @default(uuid()) @db.Uuid
+  /// Faculty that owns this department.
+  facultyId   String       @db.Uuid
+  /// Unique institutional code for the department.
+  code        String       @unique
+  /// Display name of the department.
+  name        String
+  /// Parent faculty; restrict deletion to preserve academic history.
+  faculty     Faculty      @relation(fields: [facultyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Programmes administered by this department.
+  programmes  Programme[]
+  /// Course units owned by this department.
+  courseUnits CourseUnit[]
+  /// Lecturers assigned to this department.
+  lecturers   Lecturer[]
+  /// Time the department was created.
+  createdAt   DateTime     @default(now())
+  /// Time the department was most recently updated.
+  updatedAt   DateTime     @updatedAt
+  /// Time the department was soft-deleted when academic history references it.
+  deletedAt   DateTime?
+
+  /// Support lookup of departments by faculty.
+  @@index([facultyId])
+  /// Support filtering active departments.
+  @@index([deletedAt])
+}
+
+/// A course of study administered by a department.
+model Programme {
+  /// Stable UUID identifying the programme.
+  id                          String                  @id @default(uuid()) @db.Uuid
+  /// Department that owns this programme.
+  departmentId                String                  @db.Uuid
+  /// Unique institutional code for the programme.
+  code                        String                  @unique
+  /// Display name of the programme.
+  name                        String
+  /// Qualification level awarded by the programme.
+  awardLevel                  AwardLevel
+  /// Expected duration of the programme in years.
+  durationYears               Int
+  /// Parent department; restrict deletion to preserve academic history.
+  department                  Department              @relation(fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Course units assigned to this programme's curriculum.
+  courseUnitCurriculumEntries ProgrammeCourseUnit[]
+  /// Elective-credit rules for this programme.
+  electiveRules               ProgrammeElectiveRule[]
+  /// Current and historical enrollments in this programme.
+  enrollments                 ProgrammeEnrollment[]
+  /// Applications requesting admission to this programme.
+  applications                Application[]           @relation("ApplicationDesiredProgramme")
+  /// Admission records for this programme.
+  admissionRecords            AdmissionRecord[]
+  /// Time the programme was created.
+  createdAt                   DateTime                @default(now())
+  /// Time the programme was most recently updated.
+  updatedAt                   DateTime                @updatedAt
+  /// Time the programme was soft-deleted when academic history references it.
+  deletedAt                   DateTime?
+
+  /// Support lookup of programmes by department.
+  @@index([departmentId])
+  /// Support filtering active programmes.
+  @@index([deletedAt])
+}
+
+/// A named academic year with three configured intake slots.
+model AcademicYear {
+  /// Stable UUID identifying the academic year.
+  id        String    @id @default(uuid()) @db.Uuid
+  /// Unique display label for the academic year.
+  label     String    @unique
+  /// First date of the academic year.
+  startDate DateTime
+  /// Last date of the academic year.
+  endDate   DateTime
+  /// Intakes configured within this academic year.
+  intakes   Intake[]
+  /// Time the academic year was created.
+  createdAt DateTime  @default(now())
+  /// Time the academic year was most recently updated.
+  updatedAt DateTime  @updatedAt
+  /// Time the academic year was soft-deleted when academic history references it.
+  deletedAt DateTime?
+
+  /// Support filtering active academic years.
+  @@index([deletedAt])
+}
+
+/// A configurable academic period within an academic year.
+model Intake {
+  /// Stable UUID identifying the intake.
+  id                   String                @id @default(uuid()) @db.Uuid
+  /// Academic year that contains this intake.
+  academicYearId       String                @db.Uuid
+  /// Ordinal position within the academic year; constrained to 1 through 3.
+  sequence             Int
+  /// Configurable display name for the intake.
+  name                 String
+  /// First date of the intake.
+  startDate            DateTime
+  /// Last date of the intake.
+  endDate              DateTime
+  /// Time at which course-unit selection opens.
+  selectionOpensAt     DateTime
+  /// Time at which course-unit selection closes.
+  selectionClosesAt    DateTime
+  /// Current lifecycle state of the intake.
+  status               IntakeStatus          @default(UPCOMING)
+  /// Parent academic year; restrict deletion to preserve academic history.
+  academicYear         AcademicYear          @relation(fields: [academicYearId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Shared course-unit offerings scheduled in this intake.
+  courseUnitOfferings  CourseUnitOffering[]
+  /// Programme enrollments admitted through this intake.
+  programmeEnrollments ProgrammeEnrollment[]
+  /// Student registrations for this intake.
+  studentRegistrations IntakeRegistration[]
+  /// Course-unit registrations associated with this intake.
+  unitRegistrations    UnitRegistration[]
+  /// Applications requesting admission for this intake.
+  applications         Application[]         @relation("ApplicationDesiredIntake")
+  /// Admission records for this intake.
+  admissionRecords     AdmissionRecord[]
+  /// Time the intake was created.
+  createdAt            DateTime              @default(now())
+  /// Time the intake was most recently updated.
+  updatedAt            DateTime              @updatedAt
+  /// Time the intake was soft-deleted when academic history references it.
+  deletedAt            DateTime?
+
+  /// Prevent duplicate sequence numbers within an academic year.
+  @@unique([academicYearId, sequence])
+  /// Support lookup of intakes by lifecycle state and selection window.
+  @@index([status, selectionOpensAt, selectionClosesAt])
+  /// Support filtering active intakes.
+  @@index([deletedAt])
+}
+
+/// A catalog course unit owned by a department.
+model CourseUnit {
+  /// Stable UUID identifying the course unit.
+  id                         String                         @id @default(uuid()) @db.Uuid
+  /// Unique institutional code for the course unit.
+  code                       String                         @unique
+  /// Display name of the course unit.
+  name                       String
+  /// Number of credit units awarded for completion.
+  creditUnits                Int
+  /// Academic level at which the course unit is offered.
+  level                      CourseUnitLevel
+  /// Department responsible for the course unit.
+  ownerDepartmentId          String                         @db.Uuid
+  /// Whether this course unit is general rather than programme-specific.
+  isGeneral                  Boolean
+  /// Whether students from any faculty may take this course unit.
+  openToAllFaculties         Boolean
+  /// Current lifecycle state of the course unit.
+  status                     CourseUnitStatus
+  /// Owning department; restrict deletion to preserve academic history.
+  ownerDepartment            Department                     @relation(fields: [ownerDepartmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Faculty allowlist entries for this course unit.
+  facultyEligibilities       CourseUnitFacultyEligibility[]
+  /// Programme curriculum placements for this course unit.
+  programmeCurriculumEntries ProgrammeCourseUnit[]
+  /// Prerequisites that this course unit requires.
+  prerequisites              CourseUnitPrerequisite[]       @relation("CourseUnitPrerequisites")
+  /// Course units that require this course unit as a prerequisite.
+  requiredBy                 CourseUnitPrerequisite[]       @relation("CourseUnitRequiredBy")
+  /// Shared offerings of this course unit by intake.
+  offerings                  CourseUnitOffering[]
+  /// Time the course unit was created.
+  createdAt                  DateTime                       @default(now())
+  /// Time the course unit was most recently updated.
+  updatedAt                  DateTime                       @updatedAt
+
+  /// Support lookup of course units by owner department.
+  @@index([ownerDepartmentId])
+  /// Support catalogue filtering by lifecycle state and academic level.
+  @@index([status, level])
+}
+
+/// Faculty eligibility for a course unit.
+model CourseUnitFacultyEligibility {
+  /// Course unit made available to the faculty.
+  courseUnitId String     @db.Uuid
+  /// Faculty eligible to take the course unit.
+  facultyId    String     @db.Uuid
+  /// Course unit associated with this eligibility entry.
+  courseUnit   CourseUnit @relation(fields: [courseUnitId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  /// Eligible faculty.
+  faculty      Faculty    @relation(fields: [facultyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  /// Time the eligibility entry was created.
+  createdAt    DateTime   @default(now())
+  /// Time the eligibility entry was most recently updated.
+  updatedAt    DateTime   @updatedAt
+
+  /// Prevent duplicate faculty eligibility entries.
+  @@id([courseUnitId, facultyId])
+  /// Support reverse lookup of course units eligible to a faculty.
+  @@index([facultyId])
+}
+
+/// A course-unit placement in a programme curriculum.
+model ProgrammeCourseUnit {
+  /// Stable UUID identifying the curriculum placement.
+  id           String                  @id @default(uuid()) @db.Uuid
+  /// Programme that includes the course unit.
+  programmeId  String                  @db.Uuid
+  /// Course unit assigned to the programme.
+  courseUnitId String                  @db.Uuid
+  /// Study year in which the course unit is placed.
+  studyYear    Int
+  /// Intake slot in which the course unit is placed, from 1 through 3.
+  intakeSlot   Int
+  /// Whether the course unit is required or elective.
+  type         ProgrammeCourseUnitType
+  /// Programme owning this curriculum placement.
+  programme    Programme               @relation(fields: [programmeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Course unit assigned to the programme.
+  courseUnit   CourseUnit              @relation(fields: [courseUnitId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Time the curriculum placement was created.
+  createdAt    DateTime                @default(now())
+  /// Time the curriculum placement was most recently updated.
+  updatedAt    DateTime                @updatedAt
+
+  /// Enforce one placement of a course unit in a programme.
+  @@unique([programmeId, courseUnitId])
+  /// Support curriculum lookup by programme, study year, and intake slot.
+  @@index([programmeId, studyYear, intakeSlot])
+  /// Support reverse lookup of programmes that include a course unit.
+  @@index([courseUnitId])
+}
+
+/// Elective credit bounds for a programme, study year, and intake slot.
+model ProgrammeElectiveRule {
+  /// Stable UUID identifying the elective rule.
+  id          String    @id @default(uuid()) @db.Uuid
+  /// Programme governed by this elective rule.
+  programmeId String    @db.Uuid
+  /// Study year to which this elective rule applies.
+  studyYear   Int
+  /// Intake slot to which this elective rule applies, from 1 through 3.
+  intakeSlot  Int
+  /// Minimum elective credits required for the slot.
+  minCredits  Int
+  /// Maximum elective credits allowed for the slot.
+  maxCredits  Int
+  /// Programme governed by this elective rule.
+  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Time the elective rule was created.
+  createdAt   DateTime  @default(now())
+  /// Time the elective rule was most recently updated.
+  updatedAt   DateTime  @updatedAt
+
+  /// Support lookup of elective rules for a programme curriculum slot.
+  @@index([programmeId, studyYear, intakeSlot])
+}
+
+/// A directed prerequisite relationship between two course units.
+model CourseUnitPrerequisite {
+  /// Course unit whose completion requires the prerequisite.
+  courseUnitId   String     @db.Uuid
+  /// Course unit that must be completed first.
+  prerequisiteId String     @db.Uuid
+  /// Course unit that requires the prerequisite.
+  courseUnit     CourseUnit @relation("CourseUnitPrerequisites", fields: [courseUnitId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Required course unit.
+  prerequisite   CourseUnit @relation("CourseUnitRequiredBy", fields: [prerequisiteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Time the prerequisite relationship was created.
+  createdAt      DateTime   @default(now())
+  /// Time the prerequisite relationship was most recently updated.
+  updatedAt      DateTime   @updatedAt
+
+  /// Prevent duplicate prerequisite relationships.
+  @@id([courseUnitId, prerequisiteId])
+  /// Support reverse lookup of course units requiring a prerequisite.
+  @@index([prerequisiteId])
+}
+
+/// A shared delivery instance for one course unit in one intake.
+model CourseUnitOffering {
+  /// Stable UUID identifying the offering.
+  id             String                   @id @default(uuid()) @db.Uuid
+  /// Course unit delivered by this offering.
+  courseUnitId   String                   @db.Uuid
+  /// Intake in which the course unit is delivered.
+  intakeId       String                   @db.Uuid
+  /// Optional maximum number of students for the shared offering.
+  capacity       Int?
+  /// Delivery format for this offering, independent of student schedule.
+  deliveryMode   DeliveryMode
+  /// Current lifecycle state of the offering.
+  status         CourseUnitOfferingStatus
+  /// Course unit delivered by the shared offering.
+  courseUnit     CourseUnit               @relation(fields: [courseUnitId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Intake in which the offering is delivered.
+  intake         Intake                   @relation(fields: [intakeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Lecturer assignments for this offering.
+  lecturers      OfferingLecturer[]
+  /// Student registrations in this offering.
+  registrations  UnitRegistration[]
+  /// Recurring timetable slots for this offering.
+  timetableSlots TimetableSlot[]
+  /// Dated class sessions for this offering.
+  classSessions  ClassSession[]
+  /// Time the offering was created.
+  createdAt      DateTime                 @default(now())
+  /// Time the offering was most recently updated.
+  updatedAt      DateTime                 @updatedAt
+
+  /// Enforce one shared offering per course unit and intake.
+  @@unique([courseUnitId, intakeId])
+  /// Support listing offerings in an intake by state.
+  @@index([intakeId, status])
+}
+
+/// A student academic profile linked one-to-one with an authentication user.
+model Student {
+  /// Stable UUID identifying the student profile.
+  id                    String                @id @default(uuid()) @db.Uuid
+  /// Authentication user for this student; unique for one-to-one ownership.
+  userId                String                @unique @db.Uuid
+  /// Unique institutional student number.
+  studentNumber         String                @unique
+  /// Primary mobile contact number.
+  phone                 String?
+  /// Date of birth, when recorded.
+  dateOfBirth           DateTime?             @db.Date
+  /// Gender as provided in the student's personal record.
+  gender                String?
+  /// Nationality of the student.
+  nationality           String?
+  /// National identification or passport number, when provided.
+  nationalId            String?               @unique
+  /// Home district or current residential address.
+  address               String?
+  /// Name of the student's emergency contact or next of kin.
+  nextOfKinName         String?
+  /// Phone number of the student's emergency contact or next of kin.
+  nextOfKinPhone        String?
+  /// Relationship of the emergency contact or next of kin to the student.
+  nextOfKinRelationship String?
+  /// Regular academic attendance schedule, independent of delivery format.
+  schedule              StudentSchedule
+  /// Authentication account; restrict deletion to preserve student history.
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Programme enrollment history for this student.
+  programmeEnrollments  ProgrammeEnrollment[]
+  /// Intake registrations for this student.
+  intakeRegistrations   IntakeRegistration[]
+  /// Course-unit registrations for this student.
+  unitRegistrations     UnitRegistration[]
+  /// Applications linked to this student after admission.
+  applications          Application[]
+  /// Admissions that created or confirmed this student.
+  admissionRecords      AdmissionRecord[]
+  /// Attend clicks recorded for this student.
+  sessionJoins          SessionJoin[]
+  /// Online presence intervals recorded for this student.
+  presenceIntervals     PresenceInterval[]
+  /// Attendance outcomes recorded for this student.
+  attendanceRecords     AttendanceRecord[]
+  /// Time the student profile was created.
+  createdAt             DateTime              @default(now())
+  /// Time the student profile was most recently updated.
+  updatedAt             DateTime              @updatedAt
+
+  /// Support lookup of student profiles by schedule.
+  @@index([schedule])
+}
+
+/// A lecturer profile linked to a department and authentication user.
+model Lecturer {
+  /// Stable UUID identifying the lecturer profile.
+  id           String             @id @default(uuid()) @db.Uuid
+  /// Authentication user for this lecturer; unique for one-to-one ownership.
+  userId       String             @unique @db.Uuid
+  /// Department to which the lecturer belongs.
+  departmentId String             @db.Uuid
+  /// Unique institutional staff number.
+  staffNumber  String             @unique
+  /// Authentication account; restrict deletion to preserve teaching history.
+  user         User               @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Department responsible for this lecturer.
+  department   Department         @relation(fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Offering assignments for this lecturer.
+  offerings    OfferingLecturer[]
+  /// Time the lecturer profile was created.
+  createdAt    DateTime           @default(now())
+  /// Time the lecturer profile was most recently updated.
+  updatedAt    DateTime           @updatedAt
+
+  /// Support lookup of lecturers by department.
+  @@index([departmentId])
+}
+
+/// A lecturer's role assignment on a shared course-unit offering.
+model OfferingLecturer {
+  /// Course-unit offering assigned to the lecturer.
+  offeringId String               @db.Uuid
+  /// Lecturer assigned to the offering.
+  lecturerId String               @db.Uuid
+  /// Responsibility of the lecturer on the offering.
+  role       OfferingLecturerRole
+  /// Shared course-unit offering.
+  offering   CourseUnitOffering   @relation(fields: [offeringId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Lecturer assigned to the offering.
+  lecturer   Lecturer             @relation(fields: [lecturerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Time the assignment was created.
+  createdAt  DateTime             @default(now())
+  /// Time the assignment was most recently updated.
+  updatedAt  DateTime             @updatedAt
+
+  /// Prevent duplicate assignments for the same lecturer and offering.
+  @@id([offeringId, lecturerId])
+  /// Support listing offerings assigned to a lecturer.
+  @@index([lecturerId])
+}
+
+/// A student's current or historical enrollment in a programme.
+model ProgrammeEnrollment {
+  /// Stable UUID identifying the programme enrollment.
+  id                String                    @id @default(uuid()) @db.Uuid
+  /// Student whose programme enrollment this records.
+  studentId         String                    @db.Uuid
+  /// Programme in which the student is enrolled.
+  programmeId       String                    @db.Uuid
+  /// Intake through which the student was admitted to the programme.
+  admissionIntakeId String                    @db.Uuid
+  /// Student's current study year in the programme.
+  currentStudyYear  Int
+  /// Student's current intake slot, from 1 through 3.
+  currentIntakeSlot Int
+  /// Current lifecycle state of this programme enrollment.
+  status            ProgrammeEnrollmentStatus
+  /// Student with this enrollment; preserve enrollment history on deletion.
+  student           Student                   @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Programme for this enrollment; preserve its history on deletion.
+  programme         Programme                 @relation(fields: [programmeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Intake through which the student was admitted.
+  admissionIntake   Intake                    @relation(fields: [admissionIntakeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Time the programme enrollment was created.
+  createdAt         DateTime                  @default(now())
+  /// Time the programme enrollment was most recently updated.
+  updatedAt         DateTime                  @updatedAt
+
+  /// Support lookup of a student's programme enrollment history.
+  @@index([studentId, status])
+  /// Support chronological lookup of a student's programme enrollment history.
+  @@index([studentId, createdAt])
+  /// Support lookup of programme enrollments by programme state.
+  @@index([programmeId, status])
+  /// Support lookup by admission intake.
+  @@index([admissionIntakeId])
+}
+
+/// A student's registration for a particular intake.
+model IntakeRegistration {
+  /// Stable UUID identifying the intake registration.
+  id        String                   @id @default(uuid()) @db.Uuid
+  /// Student registered for the intake.
+  studentId String                   @db.Uuid
+  /// Intake for which the student is registering.
+  intakeId  String                   @db.Uuid
+  /// Current lifecycle state of the intake registration.
+  status    IntakeRegistrationStatus
+  /// Student whose intake registration this records.
+  student   Student                  @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Intake for this registration.
+  intake    Intake                   @relation(fields: [intakeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Time the registration was created.
+  createdAt DateTime                 @default(now())
+  /// Time the registration was most recently updated.
+  updatedAt DateTime                 @updatedAt
+
+  /// Prevent multiple intake registrations for the same student and intake.
+  @@unique([studentId, intakeId])
+  /// Support listing registrations by intake and status.
+  @@index([intakeId, status])
+}
+
+/// A student's selection or completion record for a course-unit offering.
+model UnitRegistration {
+  /// Stable UUID identifying the unit registration.
+  id         String                 @id @default(uuid()) @db.Uuid
+  /// Student who selected the offering.
+  studentId  String                 @db.Uuid
+  /// Shared course-unit offering selected by the student.
+  offeringId String                 @db.Uuid
+  /// Intake associated with this unit registration.
+  intakeId   String                 @db.Uuid
+  /// Current lifecycle state of the unit registration.
+  status     UnitRegistrationStatus
+  /// Whether this registration is a retake.
+  isRetake   Boolean
+  /// Time the student selected the offering.
+  selectedAt DateTime
+  /// Student who owns this registration.
+  student    Student                @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Shared offering selected by the student.
+  offering   CourseUnitOffering     @relation(fields: [offeringId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Intake associated with this registration.
+  intake     Intake                 @relation(fields: [intakeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Time the registration record was created.
+  createdAt  DateTime               @default(now())
+  /// Time the registration record was most recently updated.
+  updatedAt  DateTime               @updatedAt
+
+  /// Prevent duplicate registrations for the same student and offering.
+  @@unique([studentId, offeringId])
+  /// Support lookup of a student's registrations by status.
+  @@index([studentId, status])
+  /// Support class lists by offering and registration status.
+  @@index([offeringId, status])
+  /// Support registration lookup by intake and status.
+  @@index([intakeId, status])
+}
+
+/// Application submitted by an applicant for a programme and intake.
+model Application {
+  /// Stable UUID identifying the application.
+  id                 String                 @id @default(uuid()) @db.Uuid
+  /// Applicant's full name as submitted.
+  applicantName      String
+  /// Applicant's contact email address.
+  email              String
+  /// Applicant's contact phone number.
+  phone              String
+  /// Applicant's date of birth.
+  dateOfBirth        DateTime               @db.Date
+  /// Applicant's nationality.
+  nationality        String
+  /// Study mode requested by the applicant.
+  studyMode          StudyMode
+  /// Regular student schedule requested for admission.
+  schedule           StudentSchedule
+  /// Programme for which the applicant is applying.
+  desiredProgrammeId String                 @db.Uuid
+  /// Intake for which the applicant is applying.
+  desiredIntakeId    String                 @db.Uuid
+  /// Channel through which the application was received.
+  source             ApplicationSource
+  /// Unique application identifier from the external university website.
+  externalRef        String?                @unique
+  /// Current application workflow state.
+  status             ApplicationStatus      @default(SUBMITTED)
+  /// User who entered the application, when entered by staff.
+  enteredById        String?                @db.Uuid
+  /// User who admitted the applicant, when admitted.
+  admittedById       String?                @db.Uuid
+  /// Time the applicant was admitted.
+  admittedAt         DateTime?
+  /// Student profile created for this applicant, when admitted.
+  studentId          String?                @db.Uuid
+  /// Programme requested by the applicant; preserve application history.
+  desiredProgramme   Programme              @relation("ApplicationDesiredProgramme", fields: [desiredProgrammeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Intake requested by the applicant; preserve application history.
+  desiredIntake      Intake                 @relation("ApplicationDesiredIntake", fields: [desiredIntakeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Staff member who entered this application, when applicable.
+  enteredBy          User?                  @relation("ApplicationEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  /// Admissions head who admitted this applicant, when applicable.
+  admittedBy         User?                  @relation("ApplicationAdmittedBy", fields: [admittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  /// Student profile associated with this application after admission.
+  student            Student?               @relation(fields: [studentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  /// Supporting documents submitted for this application.
+  documents          ApplicationDocument[]
+  /// Application fee deposit records.
+  feeRecords         ApplicationFeeRecord[]
+  /// Admission event created for this application, if admitted.
+  admissionRecord    AdmissionRecord?
+  /// Time the application was created.
+  createdAt          DateTime               @default(now())
+  /// Time the application was most recently updated.
+  updatedAt          DateTime               @updatedAt
+
+  /// Support application search by applicant email.
+  @@index([email])
+  /// Support application search by applicant name.
+  @@index([applicantName])
+  /// Support application queues by state and creation time.
+  @@index([status, createdAt])
+  /// Support lookup by requested intake and state.
+  @@index([desiredIntakeId, status])
+  /// Support lookup by requested programme.
+  @@index([desiredProgrammeId])
+  /// Support listing applications entered by a staff member.
+  @@index([enteredById])
+  /// Support listing applications admitted by a staff member.
+  @@index([admittedById])
+  /// Support lookup by linked student.
+  @@index([studentId])
+}
+
+/// Supporting document submitted for an admissions application.
+model ApplicationDocument {
+  /// Stable UUID identifying the application document.
+  id            String                    @id @default(uuid()) @db.Uuid
+  /// Application to which this document belongs.
+  applicationId String                    @db.Uuid
+  /// Category of the submitted document.
+  type          ApplicationDocumentType
+  /// Object-storage key for the document file.
+  storageKey    String
+  /// Current review state of the document.
+  status        ApplicationDocumentStatus @default(PENDING)
+  /// Review note explaining approval or rejection.
+  reviewerNote  String?
+  /// User who reviewed the document, when reviewed.
+  reviewedById  String?                   @db.Uuid
+  /// Time the document was reviewed.
+  reviewedAt    DateTime?
+  /// Application owning this document; preserve its review history.
+  application   Application               @relation(fields: [applicationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Admissions user who reviewed this document, when applicable.
+  reviewedBy    User?                     @relation("ApplicationDocumentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  /// Time the document record was created.
+  createdAt     DateTime                  @default(now())
+  /// Time the document record was most recently updated.
+  updatedAt     DateTime                  @updatedAt
+
+  /// Support listing application documents by review state.
+  @@index([applicationId, status])
+  /// Support review workload lookup by reviewer.
+  @@index([reviewedById])
+}
+
+/// Bank deposit record used to confirm an application fee.
+model ApplicationFeeRecord {
+  /// Stable UUID identifying the application fee record.
+  id            String               @id @default(uuid()) @db.Uuid
+  /// Application whose fee is recorded.
+  applicationId String               @db.Uuid
+  /// Fee amount in integer minor currency units.
+  amountMinor   Int
+  /// ISO 4217 three-letter currency code.
+  currency      String               @db.Char(3)
+  /// Bank where the deposit was made.
+  bankName      String
+  /// Bank-issued reference for the deposit.
+  bankReference String
+  /// Date the deposit was made.
+  depositDate   DateTime             @db.Date
+  /// User who recorded the deposit.
+  recordedById  String               @db.Uuid
+  /// Current state of the deposit record.
+  status        ApplicationFeeStatus @default(RECORDED)
+  /// Time the deposit record was voided.
+  voidedAt      DateTime?
+  /// User who voided the deposit record, when voided.
+  voidedById    String?              @db.Uuid
+  /// Required explanation for voiding the deposit record.
+  voidReason    String?
+  /// Application whose fee is recorded; preserve the financial record.
+  application   Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Finance user who recorded the deposit.
+  recordedBy    User                 @relation("ApplicationFeeRecorder", fields: [recordedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Finance user who voided the deposit, when applicable.
+  voidedBy      User?                @relation("ApplicationFeeVoider", fields: [voidedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  /// Time the fee record was created.
+  createdAt     DateTime             @default(now())
+  /// Time the fee record was most recently updated.
+  updatedAt     DateTime             @updatedAt
+
+  /// Prevent duplicate bank-deposit references.
+  @@unique([bankName, bankReference])
+  /// Support listing application fees by application and state.
+  @@index([applicationId, status])
+  /// Support audit lookup by the recording user.
+  @@index([recordedById])
+  /// Support audit lookup by the voiding user.
+  @@index([voidedById])
+  /// Support deposit-date reconciliation.
+  @@index([depositDate])
+}
+
+/// Immutable record of an applicant's admission decision.
+model AdmissionRecord {
+  /// Stable UUID identifying the admission record.
+  id                String          @id @default(uuid()) @db.Uuid
+  /// Application admitted; one admission record is allowed per application.
+  applicationId     String          @unique @db.Uuid
+  /// Student profile created for the admitted applicant.
+  studentId         String          @db.Uuid
+  /// Programme to which the applicant was admitted.
+  programmeId       String          @db.Uuid
+  /// Intake to which the applicant was admitted.
+  admissionIntakeId String          @db.Uuid
+  /// Study mode confirmed at admission.
+  studyMode         StudyMode
+  /// Regular schedule confirmed for the student.
+  schedule          StudentSchedule
+  /// User who made the admission decision.
+  admittedById      String          @db.Uuid
+  /// Time the admission decision was made.
+  admittedAt        DateTime
+  /// Application admitted by this record.
+  application       Application     @relation(fields: [applicationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Student profile created for this admission.
+  student           Student         @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Programme for which admission was granted.
+  programme         Programme       @relation(fields: [programmeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Intake for which admission was granted.
+  admissionIntake   Intake          @relation(fields: [admissionIntakeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Admissions head who made the decision.
+  admittedBy        User            @relation("AdmissionRecordAdmitter", fields: [admittedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Time the admission record was created.
+  createdAt         DateTime        @default(now())
+  /// Time the admission record was most recently updated.
+  updatedAt         DateTime        @updatedAt
+
+  /// Support listing admissions for a student.
+  @@index([studentId])
+  /// Support listing admissions by programme and intake.
+  @@index([programmeId, admissionIntakeId])
+  /// Support chronological admission reporting.
+  @@index([admittedAt])
+}
+
+/// Recurring weekly schedule and default location or meeting link for an offering.
+model TimetableSlot {
+  /// Stable UUID identifying the recurring timetable slot.
+  id                String             @id @default(uuid()) @db.Uuid
+  /// Course-unit offering scheduled by this slot.
+  offeringId        String             @db.Uuid
+  /// Weekday on which the slot recurs.
+  dayOfWeek         DayOfWeek
+  /// Local start time for the recurring slot.
+  startTime         DateTime           @db.Time(0)
+  /// Local end time for the recurring slot.
+  endTime           DateTime           @db.Time(0)
+  /// Physical room assigned to the slot, when applicable.
+  room              String?
+  /// Delivery format for the slot.
+  deliveryMode      DeliveryMode
+  /// Default meeting URL for the slot, when applicable.
+  defaultMeetingUrl String?
+  /// Course-unit offering scheduled by this slot.
+  offering          CourseUnitOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Class sessions generated from this recurring slot.
+  classSessions     ClassSession[]
+  /// Time the timetable slot was created.
+  createdAt         DateTime           @default(now())
+  /// Time the timetable slot was most recently updated.
+  updatedAt         DateTime           @updatedAt
+
+  /// Support lookup of timetable slots by offering and weekday.
+  @@index([offeringId, dayOfWeek])
+}
+
+/// A dated meeting generated from or associated with an offering timetable.
+model ClassSession {
+  /// Stable UUID identifying the class session.
+  id                String             @id @default(uuid()) @db.Uuid
+  /// Course-unit offering for this session.
+  offeringId        String             @db.Uuid
+  /// Recurring timetable slot that generated this session, when applicable.
+  slotId            String?            @db.Uuid
+  /// Scheduled start time of the session.
+  startsAt          DateTime
+  /// Scheduled end time of the session.
+  endsAt            DateTime
+  /// Delivery format for this session.
+  deliveryMode      DeliveryMode
+  /// Physical room for this session, when applicable.
+  room              String?
+  /// Meeting URL, when this session has online delivery.
+  meetingUrl        String?
+  /// Provider key for the meeting service; provider choices are not fixed yet.
+  meetingProvider   String?
+  /// External meeting identifier assigned by the provider.
+  externalMeetingId String?
+  /// Current lifecycle state of this session.
+  status            ClassSessionStatus @default(SCHEDULED)
+  /// Course-unit offering for this session; preserve session history.
+  offering          CourseUnitOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Timetable slot that generated this session, when applicable.
+  slot              TimetableSlot?     @relation(fields: [slotId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  /// Attend-button clicks recorded for this session.
+  joins             SessionJoin[]
+  /// Online presence intervals recorded for this session.
+  presenceIntervals PresenceInterval[]
+  /// Attendance outcomes recorded for this session.
+  attendanceRecords AttendanceRecord[]
+  /// Time the class session was created.
+  createdAt         DateTime           @default(now())
+  /// Time the class session was most recently updated.
+  updatedAt         DateTime           @updatedAt
+
+  /// Support session lookup by offering and start time.
+  @@index([offeringId, startsAt])
+  /// Support timetable queries by state and start time.
+  @@index([status, startsAt])
+  /// Support lookup by source timetable slot.
+  @@index([slotId])
+}
+
+/// Immutable record of a student's Attend-button click for a session.
+model SessionJoin {
+  /// Stable UUID identifying the Attend click.
+  id        String       @id @default(uuid()) @db.Uuid
+  /// Session for which the student clicked Attend.
+  sessionId String       @db.Uuid
+  /// Student who clicked Attend.
+  studentId String       @db.Uuid
+  /// Time the Attend action was clicked.
+  clickedAt DateTime
+  /// Session for which Attend was clicked.
+  session   ClassSession @relation(fields: [sessionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Student who clicked Attend.
+  student   Student      @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Time the click record was created.
+  createdAt DateTime     @default(now())
+
+  /// Support session click-log lookup by session and time.
+  @@index([sessionId, clickedAt])
+  /// Support a student's Attend history by time.
+  @@index([studentId, clickedAt])
+}
+
+/// Recorded interval of a student's presence in an online class session.
+model PresenceInterval {
+  /// Stable UUID identifying the presence interval.
+  id        String                 @id @default(uuid()) @db.Uuid
+  /// Session in which the interval occurred.
+  sessionId String                 @db.Uuid
+  /// Student whose presence is recorded.
+  studentId String                 @db.Uuid
+  /// Time the student joined the session.
+  joinedAt  DateTime
+  /// Time the student left the session.
+  leftAt    DateTime
+  /// Source from which the interval was recorded.
+  source    PresenceIntervalSource
+  /// Session in which the interval occurred.
+  session   ClassSession           @relation(fields: [sessionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Student whose presence is recorded.
+  student   Student                @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Time the presence interval was recorded.
+  createdAt DateTime               @default(now())
+
+  /// Support continuous-time calculations by session, student, and join time.
+  @@index([sessionId, studentId, joinedAt])
+  /// Support a student's presence history by join time.
+  @@index([studentId, joinedAt])
+  /// Support interval queries by source.
+  @@index([source])
+}
+
+/// Computed or lecturer-marked attendance outcome for a student in a session.
+model AttendanceRecord {
+  /// Stable UUID identifying the attendance record.
+  id                       String           @id @default(uuid()) @db.Uuid
+  /// Class session for which attendance is recorded.
+  sessionId                String           @db.Uuid
+  /// Student whose attendance is recorded.
+  studentId                String           @db.Uuid
+  /// Attendance outcome for the student.
+  status                   AttendanceStatus
+  /// Method used to establish the outcome.
+  method                   AttendanceMethod
+  /// Longest continuous presence in seconds.
+  longestContinuousSeconds Int
+  /// Total recorded presence in seconds across all intervals.
+  totalSeconds             Int
+  /// Time the attendance outcome was computed or marked.
+  computedAt               DateTime
+  /// User who overrode the computed or marked outcome, when applicable.
+  overriddenById           String?          @db.Uuid
+  /// Required explanation when the attendance outcome is overridden.
+  overrideReason           String?
+  /// Session for which attendance is recorded.
+  session                  ClassSession     @relation(fields: [sessionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Student whose attendance is recorded.
+  student                  Student          @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// User who overrode this outcome, when applicable.
+  overriddenBy             User?            @relation("AttendanceRecordOverrideActor", fields: [overriddenById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  /// Time the attendance record was created.
+  createdAt                DateTime         @default(now())
+  /// Time the attendance record was most recently updated.
+  updatedAt                DateTime         @updatedAt
+
+  /// Enforce one attendance outcome per student and session.
+  @@unique([sessionId, studentId])
+  /// Support class attendance registers by status.
+  @@index([sessionId, status])
+  /// Support a student's attendance history by status and session.
+  @@index([studentId, status])
+  /// Support audit lookup by override actor.
+  @@index([overriddenById])
+}
+
+/// Global attendance thresholds used for all class sessions.
+model AttendanceRule {
+  /// Fixed singleton key identifying the system-wide attendance rule.
+  id                          Int      @id @default(1)
+  /// Minimum continuous session percentage required for online presence.
+  minContinuousPercent        Int      @default(75)
+  /// Maximum reconnect gap merged into a continuous presence interval.
+  reconnectGraceSeconds       Int      @default(180)
+  /// Attendance percentage below which the student home page warns.
+  minAttendancePercentWarning Int      @default(75)
+  /// Time the attendance rule was created.
+  createdAt                   DateTime @default(now())
+  /// Time the attendance rule was most recently updated.
+  updatedAt                   DateTime @updatedAt
+}
+
+/// An institutional announcement with a publication window and scoped audiences.
+model Announcement {
+  /// Stable UUID identifying the announcement.
+  id          String                 @id @default(uuid()) @db.Uuid
+  /// Announcement headline.
+  title       String
+  /// Full announcement content.
+  body        String
+  /// Object-storage key for the optional announcement image.
+  imageKey    String?
+  /// Classification used to group and present the announcement.
+  category    AnnouncementCategory
+  /// Current publication lifecycle state.
+  status      AnnouncementStatus
+  /// Whether this announcement is prioritized in audience feeds.
+  isPinned    Boolean
+  /// Relative display order within the same pin and publication group.
+  sortOrder   Int
+  /// Earliest time the announcement may be displayed.
+  publishAt   DateTime
+  /// Optional time after which the announcement is no longer displayed.
+  expiresAt   DateTime?
+  /// User who authored the announcement.
+  createdById String                 @db.Uuid
+  /// User who authored this announcement; retain the creator reference.
+  createdBy   User                   @relation("AnnouncementCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Audience selectors attached to this announcement.
+  audiences   AnnouncementAudience[]
+  /// Time the announcement was created.
+  createdAt   DateTime               @default(now())
+  /// Time the announcement was most recently updated.
+  updatedAt   DateTime               @updatedAt
+
+  /// Support announcement feeds filtered by publication window.
+  @@index([status, publishAt, expiresAt])
+  /// Support lookup of announcements by author.
+  @@index([createdById])
+}
+
+/// Audience selector for an announcement; targetId is polymorphic by audienceType.
+model AnnouncementAudience {
+  /// Stable UUID identifying the audience selector.
+  id             String                    @id @default(uuid()) @db.Uuid
+  /// Announcement governed by this audience selector.
+  announcementId String                    @db.Uuid
+  /// Kind of audience selected.
+  audienceType   CommunicationAudienceType
+  /// Optional UUID of the role or academic target selected by audienceType.
+  targetId       String?                   @db.Uuid
+  /// Announcement governed by this audience selector.
+  announcement   Announcement              @relation(fields: [announcementId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  /// Time the selector was created.
+  createdAt      DateTime                  @default(now())
+  /// Time the selector was most recently updated.
+  updatedAt      DateTime                  @updatedAt
+
+  /// Support selector lookup while loading an announcement's audiences.
+  @@index([announcementId, audienceType])
+  /// Support audience matching by selector kind and target.
+  @@index([audienceType, targetId])
+}
+
+/// A dated academic or institutional calendar event.
+model CalendarEvent {
+  /// Stable UUID identifying the calendar event.
+  id          String                  @id @default(uuid()) @db.Uuid
+  /// Calendar event title.
+  title       String
+  /// Description shown with the calendar event.
+  description String
+  /// Calendar event classification.
+  type        CalendarEventType
+  /// Event start date and time.
+  startsAt    DateTime
+  /// Event end date and time.
+  endsAt      DateTime
+  /// Whether the event spans whole calendar days.
+  allDay      Boolean
+  /// User who authored the calendar event.
+  createdById String                  @db.Uuid
+  /// User who authored this event; retain the creator reference.
+  createdBy   User                    @relation("CalendarEventCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Audience selectors attached to this event.
+  audiences   CalendarEventAudience[]
+  /// Time the event was created.
+  createdAt   DateTime                @default(now())
+  /// Time the event was most recently updated.
+  updatedAt   DateTime                @updatedAt
+
+  /// Support calendar queries over a date range.
+  @@index([startsAt, endsAt])
+  /// Support calendar filtering by event type and start time.
+  @@index([type, startsAt])
+  /// Support lookup of calendar events by author.
+  @@index([createdById])
+}
+
+/// Audience selector for a calendar event; targetId is polymorphic by audienceType.
+model CalendarEventAudience {
+  /// Stable UUID identifying the audience selector.
+  id              String                    @id @default(uuid()) @db.Uuid
+  /// Calendar event governed by this audience selector.
+  calendarEventId String                    @db.Uuid
+  /// Kind of audience selected.
+  audienceType    CommunicationAudienceType
+  /// Optional UUID of the role or academic target selected by audienceType.
+  targetId        String?                   @db.Uuid
+  /// Calendar event governed by this audience selector.
+  calendarEvent   CalendarEvent             @relation(fields: [calendarEventId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  /// Time the selector was created.
+  createdAt       DateTime                  @default(now())
+  /// Time the selector was most recently updated.
+  updatedAt       DateTime                  @updatedAt
+
+  /// Support selector lookup while loading an event's audiences.
+  @@index([calendarEventId, audienceType])
+  /// Support audience matching by selector kind and target.
+  @@index([audienceType, targetId])
 }
