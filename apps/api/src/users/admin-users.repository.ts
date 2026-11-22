@@ -39,6 +39,23 @@ export interface NewAdminManagedUser {
   temporaryPasswordExpiresAt: Date;
 }
 
+/** Values needed to provision a student account inside the admission transaction. */
+export interface NewAdmissionStudentUser {
+  email: string;
+  name: string;
+  passwordHash: string;
+  createdById: string;
+  temporaryPasswordExpiresAt: Date;
+}
+
+/** Safe identity fields used after an admission account has been created. */
+export interface AdmissionStudentUser {
+  id: string;
+  email: string;
+  name: string | null;
+  temporaryPasswordExpiresAt: Date | null;
+}
+
 /** Filters and pagination values for listing managed accounts. */
 export interface AdminUserListQuery {
   search?: string;
@@ -116,6 +133,129 @@ export class AdminUsersRepository {
       return transaction.user.findUniqueOrThrow({
         where: { id: user.id },
         select: adminUserSelect,
+      });
+    });
+  }
+
+  /** Creates a student-role account and its audit entry in the admission transaction. */
+  async createStudentForAdmission(
+    transaction: Prisma.TransactionClient,
+    input: NewAdmissionStudentUser,
+  ): Promise<AdmissionStudentUser> {
+    const studentRole = await transaction.role.findUnique({
+      where: { name: "student" },
+      select: { id: true },
+    });
+    if (studentRole === null) {
+      throw new Error("The student role must be seeded before admissions are enabled.");
+    }
+
+    const user = await transaction.user.create({
+      data: {
+        email: input.email,
+        name: input.name,
+        passwordHash: input.passwordHash,
+        mustChangePassword: true,
+        temporaryPasswordExpiresAt: input.temporaryPasswordExpiresAt,
+        createdById: input.createdById,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        temporaryPasswordExpiresAt: true,
+      },
+    });
+    await transaction.userRole.create({
+      data: { userId: user.id, roleId: studentRole.id },
+    });
+    await transaction.auditLog.create({
+      data: {
+        actorId: input.createdById,
+        action: "admissions.student.account_created",
+        resourceType: "user",
+        resourceId: user.id,
+        metadata: { roleId: studentRole.id },
+      },
+    });
+    return user;
+  }
+
+  /** Rotates credentials for a student account and revokes its active sessions. */
+  async rotateAdmissionStudentCredentials(
+    userId: string,
+    actorId: string,
+    passwordHash: string,
+    expiresAt: Date,
+    now: Date,
+  ): Promise<AdmissionStudentUser | null> {
+    return this.prisma.$transaction(async (transaction) => {
+      const studentUser = await transaction.user.findFirst({
+        where: { id: userId, studentProfile: { isNot: null } },
+        select: { id: true },
+      });
+      if (studentUser === null) {
+        return null;
+      }
+
+      const updated = await transaction.user.updateMany({
+        where: { id: userId, status: UserStatus.ACTIVE },
+        data: {
+          passwordHash,
+          mustChangePassword: true,
+          temporaryPasswordExpiresAt: expiresAt,
+        },
+      });
+      if (updated.count !== 1) {
+        return null;
+      }
+
+      await transaction.session.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      await transaction.auditLog.create({
+        data: {
+          actorId,
+          action: "admissions.student.credentials_resent",
+          resourceType: "user",
+          resourceId: userId,
+        },
+      });
+      return transaction.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          temporaryPasswordExpiresAt: true,
+        },
+      });
+    });
+  }
+
+  /** Audits admission credential delivery and verifies email only after successful delivery. */
+  async recordAdmissionCredentialDelivery(
+    userId: string,
+    actorId: string,
+    operation: "created" | "resent",
+    delivery: "sent" | "failed",
+  ): Promise<void> {
+    await this.prisma.$transaction(async (transaction) => {
+      if (delivery === "sent") {
+        await transaction.user.updateMany({
+          where: { id: userId, status: UserStatus.ACTIVE },
+          data: { emailVerified: true },
+        });
+      }
+      await transaction.auditLog.create({
+        data: {
+          actorId,
+          action: `admissions.student.credentials_email_${delivery}`,
+          resourceType: "user",
+          resourceId: userId,
+          metadata: { operation, delivery },
+        },
       });
     });
   }

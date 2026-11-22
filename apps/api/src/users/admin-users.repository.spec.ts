@@ -1,6 +1,7 @@
 // Purpose: Verify atomic administrator-user writes, session revocation, and audit records.
 import { Test, TestingModule } from "@nestjs/testing";
 import { UserStatus } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PrismaService } from "../database/prisma.service.js";
 import { AdminUsersRepository, type AdminManagedUser } from "./admin-users.repository.js";
@@ -35,8 +36,12 @@ const transactionMock = {
     updateMany: vi.fn(),
   },
   userRole: {
+    create: vi.fn(),
     createMany: vi.fn(),
     deleteMany: vi.fn(),
+  },
+  role: {
+    findUnique: vi.fn(),
   },
 };
 
@@ -60,7 +65,9 @@ describe("AdminUsersRepository", () => {
     transactionMock.user.findUniqueOrThrow.mockResolvedValue(managedUser);
     transactionMock.user.updateMany.mockResolvedValue({ count: 1 });
     transactionMock.userRole.createMany.mockResolvedValue({ count: 1 });
+    transactionMock.userRole.create.mockResolvedValue({});
     transactionMock.userRole.deleteMany.mockResolvedValue({ count: 1 });
+    transactionMock.role.findUnique.mockResolvedValue({ id: "student-role-id" });
 
     moduleRef = await Test.createTestingModule({
       providers: [AdminUsersRepository, { provide: PrismaService, useValue: prismaMock }],
@@ -115,6 +122,49 @@ describe("AdminUsersRepository", () => {
       metadata: { roleIds: ["role-lecturer"] },
     });
     expect(auditCall.data).not.toHaveProperty("passwordHash");
+  });
+
+  it("creates the student account and student role using the admission transaction", async () => {
+    // Arrange: prepare the role lookup and user result returned by Prisma.
+    const expiresAt = new Date(NOW.getTime() + 7 * 24 * 60 * 60 * 1_000);
+    transactionMock.user.create.mockResolvedValue({
+      id: TARGET_ID,
+      email: "avery@example.test",
+      name: "Avery Student",
+      temporaryPasswordExpiresAt: expiresAt,
+    });
+
+    // Act: add the account, student role, and audit record to the supplied transaction.
+    const result = await repository.createStudentForAdmission(
+      transactionMock as unknown as Prisma.TransactionClient,
+      {
+        email: "avery@example.test",
+        name: "Avery Student",
+        passwordHash: "argon2-hash",
+        createdById: ADMIN_ID,
+        temporaryPasswordExpiresAt: expiresAt,
+      },
+    );
+
+    // Assert: all writes use the caller's transaction and no credential is included in audit data.
+    expect(result.id).toBe(TARGET_ID);
+    expect(transactionMock.role.findUnique).toHaveBeenCalledWith({
+      where: { name: "student" },
+      select: { id: true },
+    });
+    expect(transactionMock.userRole.create).toHaveBeenCalledWith({
+      data: { userId: TARGET_ID, roleId: "student-role-id" },
+    });
+    expect(transactionMock.auditLog.create).toHaveBeenCalledWith({
+      data: {
+        actorId: ADMIN_ID,
+        action: "admissions.student.account_created",
+        resourceType: "user",
+        resourceId: TARGET_ID,
+        metadata: { roleId: "student-role-id" },
+      },
+    });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   it("rotates credentials, revokes active sessions, and audits the resend atomically", async () => {

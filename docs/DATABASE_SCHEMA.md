@@ -132,6 +132,16 @@ The application writes audit records and exposes no update/delete operation.
 | rather than treated as disposable join state. Referenced academic-structure      |
 | records are soft-deleted with `deletedAt`; unreferenced records may be removed.  |
 
+Student soft deletion deactivates the linked `User` (`DEACTIVATED`), revokes
+its sessions, and retains the `Student` row because it has no `deletedAt` field
+and is referenced by academic history. Student numbers remain unique. Study
+mode changes update both the admitted `Application` and `AdmissionRecord`
+within one transaction; the required reason and before/after values are stored
+in the append-only audit log. Enrollment transitions preserve their rows and
+are audited; progression completes a registered intake only after its `Intake`
+is `CLOSED`, then advances the study year and slot or completes the final
+programme slot.
+
 Course-unit services maintain general-unit faculty eligibility and retire units
 that are referenced by curriculum, prerequisites, or offerings. Curriculum
 services replace one programme slot at a time, validate elective-credit bounds,
@@ -141,6 +151,15 @@ copy lecturer assignments from the previous intake. The current schema does not
 enforce one `PRIMARY` lecturer per offering; assignment services serialize
 assignment changes on the offering row and check the rule before writing, but
 direct database writes can bypass the service-level constraint.
+
+Course-unit selection uses the current active programme enrollment, curriculum
+slot, and faculty eligibility. Selection and drop writes are transactional;
+course-unit registrations are retained when dropped. A registrar with
+`academic:enrollment:manage` may override only the selection window, with a
+written reason and an append-only audit entry. Existing elective-rule rows are
+treated as alternative allowed credit ranges. Until result outcomes exist,
+earlier `COMPLETED` registrations are the only available prerequisite-pass
+evidence; retakes and an overall credit-load limit are not inferred.
 
 ### Admissions
 
@@ -164,9 +183,17 @@ The service layer must keep applicant, programme, intake, schedule, and
 study-mode values consistent between an application and its admission record,
 and copy the admitted schedule to the created student. It must enforce the
 separation-of-duties rules:
-the document reviewer cannot admit the same applicant, and a user who records
-an application-fee deposit cannot void that record. Voids require a reason and
-an audit/reversal record.
+a user who approved any application document cannot admit the same applicant,
+and a user who records an application-fee deposit cannot void that record.
+Voids require a reason and an audit/reversal record. Phase 2 requires
+approved `ID`, `TRANSCRIPT`, `CERTIFICATE`, and `PHOTO` documents before marking documents approved;
+`OTHER` is optional. Fee confirmation compares a physical bank deposit's
+integer minor-unit amount and configured currency with
+`APPLICATION_FEE_AMOUNT_MINOR` and `CURRENCY`. Admission creates a
+first-study-year enrollment whose programme curriculum and intake slot define
+the prompted units; unit-registration rows are created only after selection.
+Website intake authenticates with `WEBSITE_INTEGRATION_SECRET`, is rate limited,
+and uses `externalRef` for idempotency.
 
 ### Sessions and attendance
 

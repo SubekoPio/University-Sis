@@ -10,6 +10,6 @@ import { RbacService } from "./rbac.service.js";
 @Module({
   imports: [ConfigModule, PrismaModule],
   providers: [RbacRedisCacheService, RbacRepository, RbacService],
-  exports: [RbacService],
+  exports: [RbacRedisCacheService, RbacService],
 })
 export class RbacCoreModule {}

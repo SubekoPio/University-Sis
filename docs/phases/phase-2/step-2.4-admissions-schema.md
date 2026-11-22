@@ -35,7 +35,7 @@ admission decisions without generating APIs.
 - Application statuses, document review states, and fee-record states use
   finite enums. Voided fee records keep a voiding actor, timestamp, and reason.
 - Services must keep application and admission values consistent, copy the
-  admitted schedule to the student, prevent the document reviewer from
+  admitted schedule to the student, prevent any document approver from
   admitting the same applicant, and prevent a fee recorder from voiding that
   record.
 - Uploaded file contents remain in object storage. No API or service was added.

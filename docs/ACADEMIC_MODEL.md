@@ -87,6 +87,20 @@ The course-unit list after admission is preloaded from the student's programme
 curriculum. Each intake, the student is prompted with eligible core units,
 electives, retakes, and general units.
 
+The unit-selection service applies the intake's configured selection window;
+the same closing time is the student drop deadline. Core units are compulsory,
+and an override authorized by `academic:enrollment:manage` may bypass only that
+window. Overrides retain eligibility, prerequisite, capacity, timetable, core,
+and elective-credit validation and are written to `AuditLog` with a reason.
+Elective-credit rows are alternative allowed ranges: the selected elective
+credit total must fit at least one configured range.
+
+Until assessment outcomes are modeled, a `COMPLETED` registration from an
+earlier intake is the available evidence that a prerequisite was passed.
+Failed or missed outcomes cannot yet be identified, so retake prompts are
+empty. The schema also has no overall credit-load setting; selection currently
+enforces only the configured elective-credit ranges.
+
 ## Offerings and shared classes
 
 There is exactly one offering for a given course unit and intake. Its unique
@@ -105,24 +119,35 @@ rules are validated before a student's selection is accepted.
 ## Admissions and student account creation
 
 1. An applicant applies through the university website, a separate system that
-   calls the secured admissions integration using `WEBSITE_INTEGRATION_SECRET`,
-   or applies in person through the admission office.
+   calls `POST /integrations/applications` using either the `x-api-key` header
+   or an `x-signature: sha256=<hex>` HMAC of the exact request body with
+   `WEBSITE_INTEGRATION_SECRET`; the endpoint is rate limited and idempotent by
+   the website's `externalRef`. Staff can also enter applications at the
+   admission office.
 2. The admissions officer enters office applications and reviews each required
-   document, recording an outcome and note. The admissions head also has the
-   Phase 2 document-review permission, but must not review an application they
-   admit.
+   document, recording an outcome and note. ID, transcript, certificate, and
+   photo are required; an `OTHER` document is optional. The admissions head
+   also has the Phase 2 document-review permission, but must not review an
+   application they admit.
 3. The bursar confirms the application fee against its bank reference. This is
-   the Phase 2 application-fee confirmation record; the broader payment and
-   receipt workflow belongs to Phase 3.
+   a physical bank-deposit record in integer minor units, checked against
+   `APPLICATION_FEE_AMOUNT_MINOR` and `CURRENCY`; duplicate bank/reference
+   pairs are rejected. Voiding requires a different user and a reason, and
+   preserves the original record. The broader payment and receipt workflow
+   belongs to Phase 3.
 4. An admissions head admits or rejects the applicant. Admission records the
    selected programme, intake, study mode (`ONLINE` or `PHYSICAL`), and student
-   schedule (`DAY`, `EVENING`, `WEEKEND`, or `DISTANCE`). The document reviewer
-   must not be the admitting actor for the same application.
-5. On admission, the system creates the student account and emails the
-   administrator-issued temporary login credentials. The account must change
+   schedule (`DAY`, `EVENING`, `WEEKEND`, or `DISTANCE`). A user who approved
+   any application document must not admit that same application.
+5. On admission, one transaction creates the student account, profile,
+   admission record, programme enrollment, and intake registration. The system
+   sends temporary login credentials only after commit; failed delivery is
+   audited and credentials can be rotated and resent. The account must change
    its temporary password at first login; there is no public sign-up.
-6. The system creates the programme enrollment and automatically loads the
-   first study year's course units for the admitted intake slot.
+6. The first study year's course units for the admitted intake slot are
+   derived from the programme curriculum and enrollment and returned as
+   prompted units. No `UnitRegistration` is created until the student selects
+   a course unit.
 
 Staff accounts are created by administrators. Applicants become students only
 through admission; they never create their own SIS accounts.
@@ -131,6 +156,19 @@ The application and admission record store `studyMode` and `schedule`
 separately. Study mode records the applicant's online or physical mode;
 schedule records the student's regular time pattern. Neither determines the
 delivery mode of a shared course-unit offering.
+
+Student profiles are created only within admission. Student archive operations
+deactivate the linked user account and revoke its sessions while retaining the
+profile and all academic history. Student-number uniqueness is enforced by the
+database, and profile searches use bounded pagination. An admissions head with
+`admissions:study-mode:change` may change the mode of an admitted application
+only with a written reason; the application and admission record are updated
+atomically and the previous and new values are recorded in `AuditLog`.
+Programme-enrollment status changes and intake progression are audited and
+never delete enrollment rows. Progression requires the student's registration
+for a closed intake, advances through the three intake slots, and marks the
+enrollment complete after the programme's final slot. Lecturer profiles link
+an existing account to an active department.
 
 ## Student schedule and offering delivery
 

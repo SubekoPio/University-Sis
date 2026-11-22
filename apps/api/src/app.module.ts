@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { AdmissionsModule } from "./admissions/admissions.module.js";
 import { AcademicModule } from "./academic/academic.module.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { RbacModule } from "./common/rbac/rbac.module.js";
@@ -16,6 +17,7 @@ import { AdminUsersHttpModule } from "./users/admin-users-http.module.js";
       validate: validateEnvironment,
     }),
     AcademicModule,
+    AdmissionsModule,
     AuthModule,
     RbacModule,
     AdminUsersHttpModule,

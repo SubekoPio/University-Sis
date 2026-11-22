@@ -3,13 +3,18 @@ import { BadRequestException, ForbiddenException, Logger } from "@nestjs/common"
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { UserStatus } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EMAIL_SERVICE } from "../auth/email/email-service.interface.js";
 import type { EmailService } from "../auth/email/email-service.interface.js";
 import { PasswordHashingService } from "../auth/password-hashing.service.js";
 import { RbacService } from "../common/rbac/rbac.service.js";
-import { AdminUsersRepository, type AdminManagedUser } from "./admin-users.repository.js";
-import { AdminUsersService } from "./admin-users.service.js";
+import {
+  AdminUsersRepository,
+  type AdminManagedUser,
+  type AdmissionStudentUser,
+} from "./admin-users.repository.js";
+import { AdminUsersService, type AdmissionStudentCredentials } from "./admin-users.service.js";
 
 const NOW = new Date("2026-11-20T12:00:00.000Z");
 const ADMIN_ID = "c2d0b38c-26f3-466c-9a9e-6cc361223621";
@@ -30,7 +35,15 @@ const managedUser: AdminManagedUser = {
   roles: [{ role: { id: ROLE_LECTURER_ID, name: "lecturer" } }],
 };
 
+const admittedStudentUser: AdmissionStudentUser = {
+  id: TARGET_ID,
+  email: "avery@example.test",
+  name: "Avery Student",
+  temporaryPasswordExpiresAt: new Date("2026-11-27T12:00:00.000Z"),
+};
+
 const repositoryMock = {
+  createStudentForAdmission: vi.fn<AdminUsersRepository["createStudentForAdmission"]>(),
   createUser: vi.fn<AdminUsersRepository["createUser"]>(),
   findExistingRoleIds: vi.fn<AdminUsersRepository["findExistingRoleIds"]>(),
   findManagedUser: vi.fn<AdminUsersRepository["findManagedUser"]>(),
@@ -40,6 +53,10 @@ const repositoryMock = {
   listUsers: vi.fn<AdminUsersRepository["listUsers"]>(),
   recordCredentialsEmailFailure: vi.fn<AdminUsersRepository["recordCredentialsEmailFailure"]>(),
   recordCredentialsEmailSent: vi.fn<AdminUsersRepository["recordCredentialsEmailSent"]>(),
+  recordAdmissionCredentialDelivery:
+    vi.fn<AdminUsersRepository["recordAdmissionCredentialDelivery"]>(),
+  rotateAdmissionStudentCredentials:
+    vi.fn<AdminUsersRepository["rotateAdmissionStudentCredentials"]>(),
   replaceTemporaryCredentials: vi.fn<AdminUsersRepository["replaceTemporaryCredentials"]>(),
   replaceUserRoles: vi.fn<AdminUsersRepository["replaceUserRoles"]>(),
   deactivateUser: vi.fn<AdminUsersRepository["deactivateUser"]>(),
@@ -69,6 +86,7 @@ describe("AdminUsersService", () => {
     vi.setSystemTime(NOW);
 
     repositoryMock.createUser.mockResolvedValue(managedUser);
+    repositoryMock.createStudentForAdmission.mockResolvedValue(admittedStudentUser);
     repositoryMock.findExistingRoleIds.mockImplementation(async (roleIds) => roleIds);
     repositoryMock.findManagedUser.mockResolvedValue({
       ...managedUser,
@@ -83,6 +101,8 @@ describe("AdminUsersService", () => {
     });
     repositoryMock.recordCredentialsEmailFailure.mockResolvedValue();
     repositoryMock.recordCredentialsEmailSent.mockResolvedValue();
+    repositoryMock.recordAdmissionCredentialDelivery.mockResolvedValue();
+    repositoryMock.rotateAdmissionStudentCredentials.mockResolvedValue(admittedStudentUser);
     repositoryMock.replaceTemporaryCredentials.mockResolvedValue(managedUser);
     repositoryMock.replaceUserRoles.mockResolvedValue({
       user: managedUser,
@@ -222,6 +242,84 @@ describe("AdminUsersService", () => {
     );
     expect(repositoryMock.recordCredentialsEmailSent).not.toHaveBeenCalled();
     expect(result).not.toHaveProperty("temporaryPassword");
+  });
+
+  it("creates a student account in the caller's transaction without sending email", async () => {
+    // Arrange: provide the transaction supplied by the admission workflow.
+    const transaction = null as unknown as Prisma.TransactionClient;
+
+    // Act: provision the account through AdminUsersService.
+    const result = await service.createStudentForAdmission(transaction, {
+      email: " Avery@Example.Test ",
+      name: " Avery Student ",
+      admittedById: ADMIN_ID,
+    });
+
+    // Assert: only a normalized email and password hash are passed to transactional persistence.
+    const plaintext = passwordHashingMock.hashPassword.mock.calls[0]?.[0];
+    if (plaintext === undefined) {
+      throw new Error("Expected a generated temporary password.");
+    }
+    expect(repositoryMock.createStudentForAdmission).toHaveBeenCalledWith(
+      transaction,
+      expect.objectContaining({
+        email: "avery@example.test",
+        name: "Avery Student",
+        passwordHash: `argon2-hash:${plaintext}`,
+        createdById: ADMIN_ID,
+      }),
+    );
+    expect(result.temporaryPassword).toBe(plaintext);
+    expect(emailServiceMock.send).not.toHaveBeenCalled();
+  });
+
+  it("records failed admission credential delivery without undoing account creation", async () => {
+    // Arrange: make the external email provider reject delivery.
+    vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+    emailServiceMock.send.mockRejectedValue(new Error("provider unavailable"));
+    const credentials: AdmissionStudentCredentials = {
+      user: admittedStudentUser,
+      temporaryPassword: "one-time-password",
+    };
+
+    // Act: deliver credentials after the admission transaction has completed.
+    const sent = await service.sendAdmissionStudentCredentials(credentials, ADMIN_ID, "created");
+
+    // Assert: failure is audited and returned as a delivery outcome, not a workflow exception.
+    expect(sent).toBe(false);
+    expect(repositoryMock.recordAdmissionCredentialDelivery).toHaveBeenCalledWith(
+      TARGET_ID,
+      ADMIN_ID,
+      "created",
+      "failed",
+    );
+  });
+
+  it("rotates and resends credentials for an admitted student", async () => {
+    // Arrange: prepare an active student account and working email provider.
+
+    // Act: rotate the temporary password and deliver it.
+    const sent = await service.resendAdmissionStudentCredentials(TARGET_ID, ADMIN_ID);
+
+    // Assert: the password is hashed before persistence and delivery is recorded.
+    const plaintext = passwordHashingMock.hashPassword.mock.calls[0]?.[0];
+    if (plaintext === undefined) {
+      throw new Error("Expected a generated replacement password.");
+    }
+    expect(sent).toBe(true);
+    expect(repositoryMock.rotateAdmissionStudentCredentials).toHaveBeenCalledWith(
+      TARGET_ID,
+      ADMIN_ID,
+      `argon2-hash:${plaintext}`,
+      expect.any(Date),
+      expect.any(Date),
+    );
+    expect(repositoryMock.recordAdmissionCredentialDelivery).toHaveBeenCalledWith(
+      TARGET_ID,
+      ADMIN_ID,
+      "resent",
+      "sent",
+    );
   });
 
   it("rotates temporary credentials through the repository before resending them", async () => {

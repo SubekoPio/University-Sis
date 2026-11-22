@@ -52,6 +52,17 @@ export const environmentSchema = z
       .min(1)
       .transform((value) => value.split(",").map((host) => host.trim().toLowerCase()))
       .pipe(z.array(hostname).min(1)),
+    MINIO_ENDPOINT: z
+      .string()
+      .url()
+      .refine((value) => ["http:", "https:"].includes(new URL(value).protocol), {
+        message: "MINIO_ENDPOINT must use http or https.",
+      })
+      .default("http://127.0.0.1:9000"),
+    MINIO_REGION: nonEmptyString.default("us-east-1"),
+    MINIO_ROOT_USER: nonEmptyString,
+    MINIO_ROOT_PASSWORD: nonEmptyString,
+    MINIO_BUCKET: nonEmptyString.default("school-files"),
     ATTENDANCE_MIN_CONTINUOUS_PERCENT: percent.default(75),
     ATTENDANCE_RECONNECT_GRACE_SECONDS: nonNegativeInteger.default(180),
     ATTENDANCE_WARNING_PERCENT: percent.default(75),

@@ -8,6 +8,8 @@ const validEnvironment: Record<string, unknown> = {
   EMAIL_PROVIDER: "mailpit",
   WEBSITE_INTEGRATION_SECRET: "a".repeat(32),
   MEETING_ALLOWED_HOSTS: "Meet.University.Example, zoom.us",
+  MINIO_ROOT_USER: "local-user",
+  MINIO_ROOT_PASSWORD: "local-password",
   APPLICATION_FEE_AMOUNT_MINOR: "15000",
   CURRENCY: "UGX",
   SCHOOL_NAME: "University SIS",
@@ -30,6 +32,9 @@ describe("validateEnvironment", () => {
     expect(environment.ATTENDANCE_MIN_CONTINUOUS_PERCENT).toBe(75);
     expect(environment.ATTENDANCE_RECONNECT_GRACE_SECONDS).toBe(180);
     expect(environment.ATTENDANCE_WARNING_PERCENT).toBe(75);
+    expect(environment.MINIO_ENDPOINT).toBe("http://127.0.0.1:9000");
+    expect(environment.MINIO_REGION).toBe("us-east-1");
+    expect(environment.MINIO_BUCKET).toBe("school-files");
     expect(environment.MEETING_ALLOWED_HOSTS).toEqual(["meet.university.example", "zoom.us"]);
     expect(environment.FEATURE_ONLINE_CARD_ENABLED).toBe(false);
     expect(environment.FEATURE_ONLINE_BANK_ENABLED).toBe(false);
@@ -49,6 +54,8 @@ describe("validateEnvironment", () => {
         APPLICATION_FEE_AMOUNT_MINOR: "",
       }),
     ).toThrow();
+    const { MINIO_ROOT_PASSWORD: _minioPassword, ...missingMinioPassword } = validEnvironment;
+    expect(() => validateEnvironment(missingMinioPassword)).toThrow();
   });
 
   it("rejects non-HTTP app URLs and malformed meeting hosts", () => {

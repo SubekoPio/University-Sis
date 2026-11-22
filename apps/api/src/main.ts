@@ -6,7 +6,12 @@ import { AppModule } from "./app.module.js";
 import { HttpExceptionFilter } from "./common/http-exception.filter.js";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
+  // Allow the local Next.js origins to call the separate API development port.
+  app.enableCors({
+    origin: ["http://localhost:3000", "http://127.0.0.1:3000", "http://192.168.100.5:3000"],
+    credentials: true,
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

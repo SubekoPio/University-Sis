@@ -8,6 +8,8 @@ export interface AuthUser {
   status: "ACTIVE" | "SUSPENDED" | "DISABLED";
   emailVerified: boolean;
   mustChangePassword?: boolean;
+  roles?: readonly string[];
+  permissions?: readonly string[];
 }
 
 /** Access and refresh token pair returned by login and refresh endpoints. */
@@ -220,11 +222,47 @@ export function getCurrentAuthUser(): AuthUser | null {
   if (storedValue === cachedAuthUserStorageValue) {
     return cachedAuthUser;
   }
-
   const session = readAuthSession();
   cachedAuthUserStorageValue = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
   cachedAuthUser = session?.user ?? null;
   return cachedAuthUser;
+}
+
+/**
+ * Returns the browser-held authentication session, including tokens.
+ *
+ * @returns The current auth session or null outside an active session.
+ */
+export function getAuthSession(): AuthResult | null {
+  return readAuthSession();
+}
+
+/**
+ * Updates the current user summary with authorization metadata resolved by the
+ * frontend shell.
+ *
+ * @param authorization - Roles and permissions available to the current user.
+ * @returns The updated public user summary or null when no session exists.
+ */
+export function updateAuthAuthorization(authorization: {
+  roles?: readonly string[];
+  permissions?: readonly string[];
+}): AuthUser | null {
+  const session = readAuthSession();
+  if (session === null) {
+    return null;
+  }
+
+  const updatedSession: AuthResult = {
+    ...session,
+    user: {
+      ...session.user,
+      roles: authorization.roles,
+      permissions: authorization.permissions,
+    },
+  };
+  saveAuthSession(updatedSession);
+  return updatedSession.user;
 }
 
 /**
@@ -509,7 +547,15 @@ function isAuthUser(value: unknown): value is AuthUser {
     (value.status === "ACTIVE" || value.status === "SUSPENDED" || value.status === "DISABLED") &&
     "emailVerified" in value &&
     typeof value.emailVerified === "boolean" &&
-    (!("mustChangePassword" in value) || typeof value.mustChangePassword === "boolean")
+    (!("mustChangePassword" in value) || typeof value.mustChangePassword === "boolean") &&
+    (!("roles" in value) ||
+      (Array.isArray(value.roles) &&
+        value.roles.every((role): role is string => typeof role === "string"))) &&
+    (!("permissions" in value) ||
+      (Array.isArray(value.permissions) &&
+        value.permissions.every(
+          (permission): permission is string => typeof permission === "string",
+        )))
   );
 }
 

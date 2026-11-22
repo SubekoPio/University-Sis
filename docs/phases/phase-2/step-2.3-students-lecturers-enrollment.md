@@ -62,10 +62,10 @@ seed data, services, or APIs were changed.
 
 ## Known Limitations
 
-The schema preserves enrollment rows through restrictive foreign keys, but
-append-only enrollment transitions and AuditLog writes must be enforced by
-future services. Existing course-unit offerings must be assigned a delivery
-mode before the migration can apply if any such rows already exist.
+The schema preserves enrollment rows through restrictive foreign keys;
+Phase 2.11 services now enforce status transitions and progression with
+transactional audit writes. Existing course-unit offerings must be assigned a
+delivery mode before the migration can apply if any such rows already exist.
 `UnitRegistration.intakeId` consistency with its offering is a service-level
 check.
 

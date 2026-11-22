@@ -13,6 +13,7 @@ import { ApiError, getApiErrorMessage, login } from "@/lib/api-client";
 import { AuthField } from "@/components/auth/auth-field";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { Button } from "@/components/ui/button";
+import { getDefaultRoleRoute, resolveSessionRoles } from "@/lib/auth-role";
 
 const loginSchema = z.object({
   email: z
@@ -40,8 +41,14 @@ export function LoginForm() {
   });
   const mutation = useMutation({
     mutationFn: login,
-    onSuccess: (result) => {
-      router.replace(result.user.mustChangePassword === true ? "/change-password" : "/");
+    onSuccess: async (result) => {
+      if (result.user.mustChangePassword === true) {
+        router.replace("/change-password");
+        return;
+      }
+      const roles = await resolveSessionRoles();
+      const destination = getDefaultRoleRoute(roles);
+      router.replace(destination ?? "/403");
     },
   });
 

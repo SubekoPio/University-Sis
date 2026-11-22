@@ -18,6 +18,7 @@ import type { EmailService } from "../auth/email/email-service.interface.js";
 import { createTemporaryCredentialsEmail } from "../auth/email/email-templates.js";
 import { PasswordHashingService } from "../auth/password-hashing.service.js";
 import { AdminUsersRepository, type AdminManagedUser } from "./admin-users.repository.js";
+import type { AdmissionStudentUser } from "./admin-users.repository.js";
 
 const ADMIN_USER_PERMISSION = "admin:user:manage";
 const DEFAULT_TEMP_PASSWORD_TTL_DAYS = 7;
@@ -46,6 +47,12 @@ export interface ListAdminUsersFilters {
 export interface AdminUserCreationResult {
   user: AdminManagedUser;
   credentialsEmailSent: boolean;
+}
+
+/** Newly admitted student identity and one-time credential for post-commit delivery. */
+export interface AdmissionStudentCredentials {
+  user: AdmissionStudentUser;
+  temporaryPassword: string;
 }
 
 /** A paginated set of safe account records. */
@@ -123,6 +130,85 @@ export class AdminUsersService {
     }
 
     return { user: updatedUser, credentialsEmailSent };
+  }
+
+  /** Provisions a student-role account inside the admission transaction without sending email. */
+  async createStudentForAdmission(
+    transaction: Prisma.TransactionClient,
+    input: { email: string; name: string; admittedById: string },
+  ): Promise<AdmissionStudentCredentials> {
+    const temporaryPassword = this.generateTemporaryPassword();
+    const now = new Date();
+    const user = await this.repository.createStudentForAdmission(transaction, {
+      email: this.normalizeEmail(input.email),
+      name: this.normalizeName(input.name),
+      passwordHash: await this.passwordHashing.hashPassword(temporaryPassword),
+      createdById: input.admittedById,
+      temporaryPasswordExpiresAt: this.getTemporaryPasswordExpiry(now),
+    });
+    return { user, temporaryPassword };
+  }
+
+  /** Delivers admission credentials and audits the outcome without changing the admission. */
+  async sendAdmissionStudentCredentials(
+    credentials: AdmissionStudentCredentials,
+    actorId: string,
+    operation: "created" | "resent",
+  ): Promise<boolean> {
+    try {
+      const loginUrl = this.config.get<string>("APP_URL");
+      if (loginUrl === undefined || loginUrl.trim().length === 0) {
+        throw new Error("APP_URL must be configured before sending credentials.");
+      }
+      await this.emailService.send({
+        to: credentials.user.email,
+        subject: "Your University SIS account credentials",
+        html: createTemporaryCredentialsEmail({
+          name: credentials.user.name ?? "",
+          email: credentials.user.email,
+          temporaryPassword: credentials.temporaryPassword,
+          loginUrl: new URL("/login", loginUrl).toString(),
+          expiresAt: credentials.user.temporaryPasswordExpiresAt,
+        }),
+      });
+    } catch {
+      this.logger.error(
+        "Admission credential email delivery failed; an admissions user can resend it.",
+      );
+      await this.repository.recordAdmissionCredentialDelivery(
+        credentials.user.id,
+        actorId,
+        operation,
+        "failed",
+      );
+      return false;
+    }
+
+    await this.repository.recordAdmissionCredentialDelivery(
+      credentials.user.id,
+      actorId,
+      operation,
+      "sent",
+    );
+    return true;
+  }
+
+  /** Rotates and resends credentials for a student account created by admission. */
+  async resendAdmissionStudentCredentials(userId: string, actorId: string): Promise<boolean> {
+    const now = new Date();
+    const temporaryPassword = this.generateTemporaryPassword();
+    const user = await this.repository.rotateAdmissionStudentCredentials(
+      userId,
+      actorId,
+      await this.passwordHashing.hashPassword(temporaryPassword),
+      this.getTemporaryPasswordExpiry(now),
+      now,
+    );
+    if (user === null) {
+      throw new NotFoundException("Active admitted student account not found.");
+    }
+
+    return this.sendAdmissionStudentCredentials({ user, temporaryPassword }, actorId, "resent");
   }
 
   /** Rotates temporary credentials, revokes every session, and sends the new credentials. */

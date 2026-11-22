@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { getCurrentAuthUser, logout, subscribeToAuthState } from "@/lib/api-client";
+import { getDefaultRoleRoute, resolveSessionRoles } from "@/lib/auth-role";
 
 /**
  * Renders a signed-in landing page and routes unauthenticated visitors to login.
@@ -33,6 +34,14 @@ export default function Home() {
       router.replace("/change-password");
       return;
     }
+    let active = true;
+    void resolveSessionRoles().then((roles) => {
+      if (!active) return;
+      router.replace(getDefaultRoleRoute(roles) ?? "/403");
+    });
+    return () => {
+      active = false;
+    };
   }, [router, user]);
 
   if (user === null || user.mustChangePassword === true) {
